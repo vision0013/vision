@@ -1,12 +1,15 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Page Crawler</title>
+    <title>Page Crawler Extension</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/popup/index.tsx"></script>
+    <!--
+      이 파일은 이제 Vite 빌드 프로세스를 위한 뼈대 역할만 합니다.
+      실제 확장 프로그램의 UI는 content script에 의해 페이지에 직접 주입되므로
+      이 div#root와 script 태그는 더 이상 필요하지 않습니다.
+    -->
   </body>
 </html>

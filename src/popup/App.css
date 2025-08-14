@@ -1,21 +1,41 @@
+/* 페이지에 삽입될 패널의 기본 스타일 */
+#page-crawler-root {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 550px;
+  height: calc(100vh - 40px);
+  z-index: 2147483647; /* 다른 요소들보다 위에 오도록 매우 높은 z-index 설정 */
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  overflow: hidden;
+  background: #f5f5f7;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* 기존 body 스타일은 팝업 전용이었으므로 삭제 또는 주석 처리합니다. */
+/*
+body {
+  width: 600px;
+  min-height: 400px;
+  max-height: 600px;
+  overflow: hidden;
+}
+*/
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  width: 600px;
-  min-height: 400px;
-  max-height: 600px;
-  overflow: hidden;
-}
-
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%; /* 100vh 대신 100%로 변경하여 부모(#page-crawler-root)에 맞춤 */
   background: #f5f5f7;
 }
 
