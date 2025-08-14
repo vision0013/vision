@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { AnalysisResult, CrawledItem } from '../types';
 import './App.css';
 
-// App 컴포넌트가 크롤링된 초기 데이터를 props로 받도록 수정합니다.
-function App({ initialData }: { initialData: AnalysisResult }) {
-  // useState를 사용하지 않고 prop을 직접 사용하도록 변경하여 경고를 제거합니다.
+// App 컴포넌트가 받을 props 타입을 정의합니다.
+interface AppProps {
+  initialData: AnalysisResult;
+  onItemClick: (ownerId: number) => void;
+}
+
+// App 컴포넌트가 크롤링된 초기 데이터와 클릭 핸들러를 props로 받도록 수정합니다.
+function App({ initialData, onItemClick }: AppProps) {
   const analysisResult = initialData;
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 수동 크롤링 버튼은 이제 새로고침을 안내하는 역할만 합니다.
   const refreshCrawl = () => {
-    // confirm은 확장 프로그램 환경에서 불안정할 수 있으므로 alert로 변경합니다.
     alert('페이지를 새로고침하여 다시 크롤링할 수 있습니다.');
     window.location.reload();
   };
@@ -121,7 +124,12 @@ function App({ initialData }: { initialData: AnalysisResult }) {
             </div>
             <div className="items-list">
               {filteredItems.slice(0, 100).map((item) => (
-                <div key={item.id} className={`item item-${item.type}`}>
+                <div
+                  key={item.id}
+                  className={`item item-${item.type}`}
+                  onClick={() => onItemClick(item.ownerId)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="item-header">
                     <span className="item-type">{item.type}</span>
                     <span className="item-tag">{item.tag}</span>

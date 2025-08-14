@@ -85,6 +85,9 @@ export class PageCrawler {
 
     const ownerId = this.nextElementId++;
     this.elIdMap.set(el, ownerId);
+    
+    // ✨ 빠져있던 이 한 줄을 다시 추가했습니다! ✨
+    el.setAttribute('data-crawler-id', ownerId.toString());
 
     const meta = {
       tag,
