@@ -1,10 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+// 경로 및 이름 수정
+import SidePanel from './SidePanel' 
+import './SidePanel.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <SidePanel />
   </StrictMode>,
 )

@@ -15,6 +15,7 @@ export interface CrawledItem {
   role: string;
   rect: BoundingBox;
   type: ItemType;
+  // 일반 텍스트 내용 또는 링크(<a>)의 텍스트를 저장합니다.
   text?: string;
   alt?: string;
   title?: string;

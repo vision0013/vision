@@ -86,7 +86,6 @@ export class PageCrawler {
     const ownerId = this.nextElementId++;
     this.elIdMap.set(el, ownerId);
     
-    // ✨ 빠져있던 이 한 줄을 다시 추가했습니다! ✨
     el.setAttribute('data-crawler-id', ownerId.toString());
 
     const meta = {
@@ -120,6 +119,8 @@ export class PageCrawler {
       // Handle links
       if (tag === "a") {
         const href = el.getAttribute("href") || "";
+        // ✨ 변경: 링크의 텍스트 내용도 함께 수집합니다.
+        const text = this.normText(el.textContent);
         if (href) {
           this.items.push({
             id: this.nextItemId++,
@@ -129,7 +130,8 @@ export class PageCrawler {
             role: meta.role,
             rect: meta.rect,
             type: "link" as ItemType,
-            href
+            href,
+            text: text || undefined // 텍스트가 있으면 추가, 없으면 undefined
           });
         }
       }
@@ -152,20 +154,23 @@ export class PageCrawler {
       }
 
       // Handle text nodes
-      for (const node of el.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const t = this.normText(node.nodeValue || "");
-          if (this.allowTextGlobal(t)) {
-            this.items.push({
-              id: this.nextItemId++,
-              ownerId,
-              parentId: parentElId,
-              tag,
-              role: meta.role,
-              rect: meta.rect,
-              type: "text" as ItemType,
-              text: t
-            });
+      // ✨ 변경: 링크(a)나 버튼(button) 태그가 아닐 경우에만 일반 텍스트로 처리하여 중복 수집을 방지합니다.
+      if (tag !== 'a' && tag !== 'button') {
+        for (const node of el.childNodes) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            const t = this.normText(node.nodeValue || "");
+            if (this.allowTextGlobal(t)) {
+              this.items.push({
+                id: this.nextItemId++,
+                ownerId,
+                parentId: parentElId,
+                tag,
+                role: meta.role,
+                rect: meta.rect,
+                type: "text" as ItemType,
+                text: t
+              });
+            }
           }
         }
       }
