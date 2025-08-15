@@ -1,8 +1,13 @@
 import { PageCrawler } from './crawler';
+import { VoiceCommandProcessor } from './voice-commands';
 
 // --- 전역 변수 ---
 let highlightedElement: HTMLElement | null = null;
 let debounceTimeout: number;
+let currentAnalysisResult: any = null;
+
+// Voice Command Processor 인스턴스
+const voiceCommandProcessor = new VoiceCommandProcessor();
 
 /**
  * 페이지를 크롤링하고 결과를 백그라운드로 전송하는 함수
@@ -11,6 +16,9 @@ const runCrawler = () => {
   console.log('Page analysis started...');
   const crawler = new PageCrawler();
   const analysisResult = crawler.analyze();
+
+  // 전역 변수에 분석 결과 저장 (음성 명령에서 사용)
+  currentAnalysisResult = analysisResult;
 
   // 결과를 백그라운드 스크립트로 전송
   chrome.runtime.sendMessage({
@@ -55,6 +63,17 @@ const highlightElementById = (ownerId: number) => {
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   if (request.action === 'highlightElement') {
     highlightElementById(request.ownerId);
+  }
+  
+  // 음성 명령 처리
+  if (request.action === 'processVoiceCommand') {
+    if (currentAnalysisResult && currentAnalysisResult.items) {
+      console.log('Processing voice command:', request.command);
+      const result = voiceCommandProcessor.processCommand(request.command, currentAnalysisResult.items);
+      console.log('Voice command result:', result);
+    } else {
+      console.warn('No analysis result available for voice command');
+    }
   }
 });
 

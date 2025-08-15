@@ -20,4 +20,12 @@ chrome.runtime.onMessage.addListener((request, sender, _sendResponse) => {
       ownerId: request.ownerId
     });
   }
+  
+  // 사이드 패널로부터 음성 명령 요청을 받아 해당 탭의 콘텐츠 스크립트로 전달
+  if (request.action === 'executeVoiceCommand' && request.tabId) {
+    chrome.tabs.sendMessage(request.tabId, {
+      action: 'processVoiceCommand',
+      command: request.command
+    });
+  }
 });
