@@ -6,26 +6,21 @@ import { resolve } from 'path';
 export default defineConfig({
   plugins: [react()],
   build: {
+    outDir: 'dist',
     rollupOptions: {
       input: {
-        panel: resolve(__dirname, 'panel.html'),
+        // 1. 사이드 패널 UI (프로젝트 루트의 index.html을 가리킴)
+        main: resolve(__dirname, 'index.html'),
+        // 2. 백그라운드 스크립트
         background: resolve(__dirname, 'src/background/background.ts'),
-        // ✨ 변경: content_script.tsx의 실제 파일 위치에 맞게 경로를 수정했습니다.
+        // 3. 콘텐츠 스크립트
         content_script: resolve(__dirname, 'src/content/content_script.tsx'),
       },
       output: {
-        // ✨ 변경: 빌드 결과물이 폴더 구조를 유지하도록 content_script 경우를 추가합니다.
-        entryFileNames: (chunkInfo) => {
-          if (chunkInfo.name === 'background') {
-            return 'src/background/background.js';
-          }
-          if (chunkInfo.name === 'content_script') {
-            return 'src/content/content_script.js';
-          }
-          return 'src/[name].js';
-        },
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]',
+        // 빌드 결과물 파일 이름을 [name].js 형식으로 만듦 (예: background.js)
+        entryFileNames: `[name].js`,
+        chunkFileNames: `assets/[name].js`,
+        assetFileNames: `assets/[name].[ext]`,
       },
     },
   },

@@ -1,31 +1,39 @@
+// 각 탭의 마지막으로 확인된 URL을 저장하는 객체
+const tabLastUrls: { [key: number]: string } = {};
+
 // 아이콘 클릭 시 사이드 패널을 열도록 설정
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
-// 콘텐츠 스크립트로부터 크롤링 완료 메시지를 받아 모든 사이드 패널에 전달
 chrome.runtime.onMessage.addListener((request, sender, _sendResponse) => {
-  // 콘텐츠 스크립트로부터 온 메시지인지 확인
+  // content_script로부터 URL 확인 요청을 받았을 때
+  if (request.action === 'checkUrl' && sender.tab?.id) {
+    const tabId = sender.tab.id;
+    const currentUrl = request.url;
+
+    // background에 저장된 이전 URL과 다를 경우에만 크롤링 명령 전송
+    if (tabLastUrls[tabId] !== currentUrl) {
+      console.log(`[background] URL change detected for tab ${tabId}.`);
+      tabLastUrls[tabId] = currentUrl; // 새로운 URL을 기억
+      chrome.tabs.sendMessage(tabId, { action: 'runCrawler' });
+    }
+    return;
+  }
+
+  // 기존 메시지 핸들러들
   if (sender.tab && request.action === 'crawlComplete') {
-    // 모든 런타임(사이드 패널 포함)에 데이터 업데이트 메시지 전송
-    chrome.runtime.sendMessage({
-      action: 'updatePanelData',
-      data: request.data
-    });
+    chrome.runtime.sendMessage({ action: 'updatePanelData', data: request.data });
   }
-  
-  // 사이드 패널로부터 하이라이트 요청을 받아 해당 탭의 콘텐츠 스크립트로 전달
   if (request.action === 'highlightElement' && request.tabId) {
-    chrome.tabs.sendMessage(request.tabId, {
-      action: 'highlightElement',
-      ownerId: request.ownerId
-    });
+    chrome.tabs.sendMessage(request.tabId, { action: 'highlightElement', ownerId: request.ownerId });
   }
-  
-  // 사이드 패널로부터 음성 명령 요청을 받아 해당 탭의 콘텐츠 스크립트로 전달
   if (request.action === 'executeVoiceCommand' && request.tabId) {
-    chrome.tabs.sendMessage(request.tabId, {
-      action: 'processVoiceCommand',
-      command: request.command
-    });
+    chrome.tabs.sendMessage(request.tabId, { action: 'processVoiceCommand', command: request.command });
   }
+});
+
+// 탭이 닫힐 때 메모리에서 해당 탭의 URL 정보를 삭제
+chrome.tabs.onRemoved.addListener((tabId) => {
+  delete tabLastUrls[tabId];
+  console.log(`[background] Cleaned up URL for closed tab ${tabId}.`);
 });
