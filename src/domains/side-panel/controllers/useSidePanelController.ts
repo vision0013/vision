@@ -7,6 +7,8 @@ export const useSidePanelController = () => {
     analysisResult,
     activeTabId,
     setAnalysisResult,
+    // ✨ 1. 새로 만든 스토어 액션 가져오기
+    addAnalysisItems,
     setActiveTabId,
     getFilteredItems,
     filter,
@@ -15,11 +17,9 @@ export const useSidePanelController = () => {
     setSearchTerm,
   } = useSidePanelStore();
 
-  // ref로 최신 값들을 추적
   const analysisResultRef = useRef(analysisResult);
   const activeTabIdRef = useRef(activeTabId);
 
-  // 값이 변경될 때마다 ref 업데이트
   useEffect(() => {
     analysisResultRef.current = analysisResult;
   }, [analysisResult]);
@@ -28,16 +28,31 @@ export const useSidePanelController = () => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
 
+
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) setActiveTabId(tabs[0].id);
     });
+    
     const messageListener = (request: any) => {
-      if (request.action === 'updatePanelData') setAnalysisResult(request.data);
+      // 기존 전체 업데이트 로직
+      if (request.action === 'updatePanelData') {
+        console.log('🔄 Side Panel: Received full update with', request.data.items.length, 'items');
+        setAnalysisResult(request.data);
+      } 
+      
+      // ✨ 2. 새로운 아이템 추가 로직
+      else if (request.action === 'addNewItems') {
+        console.log('🔄 Side Panel: Received', request.data.length, 'new items to add.');
+        addAnalysisItems(request.data);
+      }
     };
+    
     chrome.runtime.onMessage.addListener(messageListener);
     return () => chrome.runtime.onMessage.removeListener(messageListener);
-  }, [setActiveTabId, setAnalysisResult]);
+    
+    // ✨ 3. 의존성 배열에 addAnalysisItems 추가
+  }, [setActiveTabId, setAnalysisResult, addAnalysisItems]);
 
   const handleItemClick = (ownerId: number) => {
     if (activeTabId) {
@@ -45,32 +60,24 @@ export const useSidePanelController = () => {
     }
   };
 
-  // ✨ Content Script로 메시지 전송
   const handleVoiceCommand = useCallback((command: string) => {
-    // ref를 통해 최신 값 참조
     const currentTabId = activeTabIdRef.current;
+    // ✨ 중요: content_script와 동기화된 최신 analysisResult를 ref에서 직접 참조합니다.
     const currentAnalysisResult = analysisResultRef.current;
     
     console.log('🎤 Voice command received:', command);
-    console.log('🎤 Current tab ID:', currentTabId);
-    console.log('🎤 Analysis result available:', !!currentAnalysisResult);
     
     if (!currentAnalysisResult || !currentTabId) {
       console.warn('❌ No analysis result or tab ID available for voice command');
-      console.warn('  - analysisResult:', !!currentAnalysisResult);
-      console.warn('  - activeTabId:', currentTabId);
       return;
     }
-
-    console.log('🎤 Sending voice command:', command, 'to tab:', currentTabId);
     
-    // Content Script로 음성 명령 전송
     chrome.runtime.sendMessage({
       action: 'executeVoiceCommand',
       command: command,
       tabId: currentTabId
     });
-  }, []); // 의존성 제거로 재생성 방지
+  }, []); // 의존성 배열은 비워둡니다.
 
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 

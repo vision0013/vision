@@ -6,21 +6,22 @@ let highlightedElement: HTMLElement | null = null;
 let debounceTimeout: number;
 let currentAnalysisResult: any = null;
 
-// Voice Command Processor 인스턴스
+// ✨ 1. 핵심 수정: PageCrawler 인스턴스를 한 번만 생성하여 재사용
+const crawler = new PageCrawler();
 const voiceCommandProcessor = new VoiceCommandProcessor();
 
 /**
  * 페이지를 크롤링하고 결과를 백그라운드로 전송하는 함수
  */
 const runCrawler = () => {
-  console.log('Page analysis started...');
-  const crawler = new PageCrawler();
+  console.log('🔄 Page analysis started...');
+  // ✨ 2. 핵심 수정: 기존 인스턴스를 사용 (내부적으로 reset 호출됨)
   const analysisResult = crawler.analyze();
 
-  // 전역 변수에 분석 결과 저장 (음성 명령에서 사용)
   currentAnalysisResult = analysisResult;
 
-  // 결과를 백그라운드 스크립트로 전송
+  console.log('🔄 Sending crawl results to background script:', analysisResult.items.length, 'items');
+  
   chrome.runtime.sendMessage({
     action: 'crawlComplete',
     data: analysisResult
@@ -34,19 +35,16 @@ const runCrawler = () => {
 const highlightElementById = (ownerId: number) => {
   const element = document.querySelector(`[data-crawler-id="${ownerId}"]`) as HTMLElement;
   if (element) {
-    // 기존 하이라이트 제거
     if (highlightedElement) {
       highlightedElement.style.outline = '';
       highlightedElement.style.boxShadow = '';
     }
 
-    // 새 요소로 스크롤 및 하이라이트
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     element.style.outline = '3px solid #007AFF';
     element.style.boxShadow = '0 0 15px rgba(0, 122, 255, 0.5)';
     highlightedElement = element;
 
-    // 2.5초 후 하이라이트 자동 제거
     setTimeout(() => {
       if (highlightedElement === element) {
          element.style.outline = '';
@@ -59,13 +57,11 @@ const highlightElementById = (ownerId: number) => {
 
 // --- 이벤트 리스너 및 옵저버 설정 ---
 
-// 사이드 패널로부터 오는 메시지 수신
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   if (request.action === 'highlightElement') {
     highlightElementById(request.ownerId);
   }
   
-  // 음성 명령 처리
   if (request.action === 'processVoiceCommand') {
     if (currentAnalysisResult && currentAnalysisResult.items) {
       console.log('Processing voice command:', request.command);
@@ -77,15 +73,60 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   }
 });
 
-// DOM 변경을 감지하여 다시 크롤링 수행 (디바운싱 적용)
-const mutationCallback = () => {
-  clearTimeout(debounceTimeout);
-  debounceTimeout = window.setTimeout(() => {
-    console.log('DOM has changed. Re-analyzing page...');
-    observer.disconnect();
-    runCrawler();
-    observer.observe(document.body, observerConfig);
-  }, 1500);
+const runPartialCrawler = (changedElements: HTMLElement[]) => {
+  if (!currentAnalysisResult || changedElements.length === 0) return;
+  
+  // ✨ 3. 핵심 수정: 기존 인스턴스를 사용하여 '새로운' 아이템만 찾아냄
+  const newItems = crawler.analyzeElements(changedElements);
+  
+  if (newItems.length > 0) {
+    const updatedResult = {
+      ...currentAnalysisResult,
+      items: [...currentAnalysisResult.items, ...newItems]
+    };
+    
+    currentAnalysisResult = updatedResult;
+    
+    console.log(`🔄 Added ${newItems.length} new items (total: ${updatedResult.items.length})`);
+    
+    chrome.runtime.sendMessage({
+      action: 'crawlComplete',
+      data: updatedResult
+    });
+  }
+};
+
+const mutationCallback = (mutations: MutationRecord[]) => {
+  const changedElements = new Set<HTMLElement>();
+  let hasSignificantChange = false;
+  
+  mutations.forEach(mutation => {
+    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+      mutation.addedNodes.forEach(node => {
+        if (node instanceof HTMLElement) {
+          changedElements.add(node);
+        }
+      });
+      hasSignificantChange = true;
+    }
+    if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+      hasSignificantChange = true;
+    }
+    if (mutation.type === 'attributes' && mutation.target instanceof HTMLElement) {
+      changedElements.add(mutation.target);
+    }
+  });
+
+  if (hasSignificantChange) {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = window.setTimeout(() => {
+      const elementsArray = Array.from(changedElements);
+      if (elementsArray.length > 0) {
+        console.log('🔄 Running partial crawling on', elementsArray.length, 'changed elements...');
+        runPartialCrawler(elementsArray);
+      }
+    }, 500);
+  }
 };
 
 const observer = new MutationObserver(mutationCallback);
@@ -96,6 +137,45 @@ const observerConfig = {
   characterData: true
 };
 
+let currentUrl = window.location.href;
+
+const checkUrlChange = () => {
+  const newUrl = window.location.href;
+  if (newUrl !== currentUrl) {
+    console.log('🔄 URL changed from', currentUrl, 'to', newUrl);
+    currentUrl = newUrl;
+    setTimeout(() => {
+      console.log('🔄 Re-analyzing page after navigation...');
+      runCrawler();
+    }, 1000);
+  }
+};
+
+window.addEventListener('popstate', () => {
+  console.log('🔄 Popstate event detected');
+  checkUrlChange();
+});
+
+const originalPushState = history.pushState;
+const originalReplaceState = history.replaceState;
+
+history.pushState = function(...args) {
+  originalPushState.apply(history, args);
+  console.log('🔄 PushState detected');
+  setTimeout(checkUrlChange, 100);
+};
+
+history.replaceState = function(...args) {
+  originalReplaceState.apply(history, args);
+  console.log('🔄 ReplaceState detected');
+  setTimeout(checkUrlChange, 100);
+};
+
+window.addEventListener('hashchange', () => {
+  console.log('🔄 Hash change detected');
+  checkUrlChange();
+});
+
 // --- 초기 실행 ---
 observer.observe(document.body, observerConfig);
-runCrawler(); // 페이지 로드 시 첫 크롤링 실행
+runCrawler();

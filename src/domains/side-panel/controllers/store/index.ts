@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { AnalysisResult, CrawledItem } from '../../../../types';
 
-// 스토어의 상태와 액션에 대한 타입 정의
 interface SidePanelState {
   analysisResult: AnalysisResult | null;
   filter: string;
   searchTerm: string;
   activeTabId: number | null;
   setAnalysisResult: (result: AnalysisResult | null) => void;
+  // ✨ 1. 새로운 아이템을 추가하는 액션 타입 정의
+  addAnalysisItems: (newItems: CrawledItem[]) => void;
   setFilter: (filter: string) => void;
   setSearchTerm: (term: string) => void;
   setActiveTabId: (id: number | null) => void;
@@ -15,19 +16,37 @@ interface SidePanelState {
 }
 
 export const useSidePanelStore = create<SidePanelState>((set, get) => ({
-  // --- 상태 (State) ---
   analysisResult: null,
   filter: 'all',
   searchTerm: '',
   activeTabId: null,
 
-  // --- 액션 (Actions) ---
-  setAnalysisResult: (result) => set({ analysisResult: result }),
+  setAnalysisResult: (result) => {
+    set({ analysisResult: result });
+  },
+  
+  // ✨ 2. 새로운 액션 구현
+  addAnalysisItems: (newItems) => set((state) => {
+    if (!state.analysisResult || newItems.length === 0) {
+      return {}; // 기존 상태 유지
+    }
+
+    // 새 아이템을 기존 목록에 추가
+    const updatedItems = [...state.analysisResult.items, ...newItems];
+
+    // 현재 analysisResult 상태를 새로운 아이템 목록으로 업데이트
+    return {
+      analysisResult: {
+        ...state.analysisResult,
+        items: updatedItems,
+      },
+    };
+  }),
+
   setFilter: (filter) => set({ filter }),
   setSearchTerm: (term) => set({ searchTerm: term }),
   setActiveTabId: (id) => set({ activeTabId: id }),
 
-  // --- 필터링 로직 (Selector/Getter) ---
   getFilteredItems: () => {
     const { analysisResult, filter, searchTerm } = get();
     if (!analysisResult) return [];
