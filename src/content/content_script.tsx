@@ -1,3 +1,4 @@
+// content_script.tsx
 import { PageCrawler } from './crawler';
 import { VoiceCommandProcessor } from './voice-commands';
 
@@ -7,6 +8,14 @@ let currentAnalysisResult: any = null;
 
 const crawler = new PageCrawler();
 const voiceCommandProcessor = new VoiceCommandProcessor();
+
+/**
+ * URL 변경을 감지하고 background에 확인 요청
+ */
+const handleUrlChange = () => {
+  console.log('🔍 URL change detected:', window.location.href);
+  chrome.runtime.sendMessage({ action: 'checkUrl', url: window.location.href });
+};
 
 /**
  * 페이지를 크롤링하고 결과를 백그라운드로 전송하는 함수
@@ -19,6 +28,9 @@ const runCrawler = () => {
   chrome.runtime.sendMessage({ action: 'crawlComplete', data: analysisResult });
 };
 
+/**
+ * 요소를 하이라이트하는 함수
+ */
 const highlightElementById = (ownerId: number) => {
   const element = document.querySelector(`[data-crawler-id="${ownerId}"]`) as HTMLElement;
   if (element) {
@@ -40,17 +52,43 @@ const highlightElementById = (ownerId: number) => {
   }
 };
 
-// --- 메시지 리스너 (background로부터 오는 메시지 처리) ---
+// --- URL 변경 감지 설정 ---
+
+// 1. History API 메서드 가로채기 (SPA 내비게이션)
+const originalPushState = history.pushState;
+const originalReplaceState = history.replaceState;
+
+history.pushState = function(...args) {
+  originalPushState.apply(history, args);
+  handleUrlChange();
+};
+
+history.replaceState = function(...args) {
+  originalReplaceState.apply(history, args);
+  handleUrlChange();
+};
+
+// 2. 뒤로가기/앞으로가기 감지
+window.addEventListener('popstate', handleUrlChange);
+
+// 3. 새로운 Navigation API (Chrome 102+) - 타입 체크 추가
+if ('navigation' in window && (window as any).navigation) {
+  const navigation = (window as any).navigation;
+  if (navigation && typeof navigation.addEventListener === 'function') {
+    navigation.addEventListener('navigate', handleUrlChange);
+  }
+}
+
+// --- 메시지 리스너 ---
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
-  // background로부터 크롤링 실행 명령을 받았을 때
   if (request.action === 'runCrawler') {
     runCrawler();
   }
   
-  // 기존 메시지 핸들러들
   if (request.action === 'highlightElement') {
     highlightElementById(request.ownerId);
   }
+  
   if (request.action === 'processVoiceCommand') {
     if (currentAnalysisResult?.items) {
       voiceCommandProcessor.processCommand(request.command, currentAnalysisResult.items);
@@ -58,8 +96,10 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
   }
 });
 
-// --- ✨ background에 주기적으로 URL을 보고하는 로직 ---
-setInterval(() => {
-  // 0.5초마다 현재 URL을 background에 보내서 변경 여부 확인을 요청
-  chrome.runtime.sendMessage({ action: 'checkUrl', url: window.location.href });
-}, 500);
+// --- 초기 실행 ---
+// 페이지 최초 로드 시 즉시 크롤링
+runCrawler();
+
+// --- Fallback: 혹시 모를 놓친 변경 대비 (선택사항) ---
+// 10초마다 한 번씩만 체크 (매우 낮은 빈도)
+setInterval(handleUrlChange, 10000);
