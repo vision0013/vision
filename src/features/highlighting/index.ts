@@ -1,2 +1,2 @@
-export { HighlightManager } from './highlightManager';
-export { requestHighlight } from './highlighter';
+export { HighlightManager, createHighlightManager } from './controllers/highlight-controller';
+export { requestHighlight } from './process/highlight-requester';

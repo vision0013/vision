@@ -1,11 +1,6 @@
 import React from 'react';
-
-interface FilterControlsProps {
-  filter: string;
-  onFilterChange: (value: string) => void;
-  searchTerm: string;
-  onSearchTermChange: (value: string) => void;
-}
+import { FILTER_OPTIONS } from '../config/constants';
+import { FilterControlsProps } from '../types/filter-types';
 
 export const FilterControls: React.FC<FilterControlsProps> = ({
   filter,
@@ -20,11 +15,11 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         onChange={(e) => onFilterChange(e.target.value)}
         className="filter-select"
       >
-        <option value="all">All Types</option>
-        <option value="text">Text</option>
-        <option value="image">Images</option>
-        <option value="link">Links</option>
-        <option value="button">Buttons</option>
+        {FILTER_OPTIONS.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
       <input
         type="text"

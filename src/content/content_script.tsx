@@ -1,5 +1,5 @@
 // content_script.tsx - 전체 코드 (상세 디버깅 버전)
-import { PageCrawler, DynamicElementObserver } from '../features/page-analysis';
+import { pageCrawler, DynamicElementObserver } from '../features/page-analysis';
 import { VoiceCommandProcessor } from '../features/voice-commands';
 import { HighlightManager } from '../features/highlighting'; // 👈 추가
 
@@ -9,8 +9,6 @@ import { HighlightManager } from '../features/highlighting'; // 👈 추가
 // =============================================
 let currentAnalysisResult: any = null;
 let dynamicObserver: DynamicElementObserver | null = null;
-
-const crawler = new PageCrawler();
 const highlightManager = new HighlightManager(); // 👈 HighlightManager 인스턴스 생성
 const voiceCommandProcessor = new VoiceCommandProcessor(highlightManager); // 👈 인스턴스 전달
 
@@ -83,7 +81,7 @@ const runCrawler = async () => {
   // 페이지 분석 실행
   console.log('🔍 Starting full page crawl...');
   const crawlStartTime = performance.now();
-  const analysisResult = crawler.analyze();
+  const analysisResult = pageCrawler.analyze();
   const crawlEndTime = performance.now();
   
   console.log(`⚡ Full crawl completed in ${(crawlEndTime - crawlStartTime).toFixed(1)}ms`);
@@ -104,7 +102,7 @@ const runCrawler = async () => {
     // 성공한 경우에만 동적 감지 시작
     console.log('🚀 Starting dynamic element observer...');
     
-    dynamicObserver = new DynamicElementObserver(crawler, async (newItems) => {
+    dynamicObserver = new DynamicElementObserver(pageCrawler, async (newItems) => {
       console.log('🆕 DynamicObserver callback triggered');
       console.log(`📈 Found ${newItems.length} new dynamic items:`, newItems);
       

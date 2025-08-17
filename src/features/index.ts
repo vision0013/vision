@@ -16,4 +16,7 @@ export * from './filtering';
 export * from './permissions';
 
 // Highlighting
-export * from './highlighting'; 
+export * from './highlighting';
+
+// Side Panel Management
+export * from './side-panel-management'; 

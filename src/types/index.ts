@@ -3,11 +3,10 @@ export interface BoundingBox {
   left: number;
   width: number;
   height: number;
-    hidden?: boolean;  // 숨겨진 상태
-
+  hidden?: boolean;
 }
 
-export type ItemType = 'text' | 'image' | 'link' | 'button' |'container';
+export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container';
 
 export interface CrawledItem {
   id: number;
@@ -17,15 +16,13 @@ export interface CrawledItem {
   role: string;
   rect: BoundingBox;
   type: ItemType;
-  // 일반 텍스트 내용 또는 링크(<a>)의 텍스트를 저장합니다.
   text?: string;
   alt?: string;
   title?: string;
   src?: string;
   href?: string;
   label?: string;
-    hidden?: boolean;  // 숨겨진 상태 플래그
-
+  hidden?: boolean;
 }
 
 export interface AnalysisResult {
@@ -34,7 +31,7 @@ export interface AnalysisResult {
   visited: number;
   elapsedMs: number;
   items: CrawledItem[];
-    stats?: {
+  stats?: {
     total: number;
     visible: number;
     hidden: number;
@@ -44,4 +41,10 @@ export interface AnalysisResult {
 export interface MessagePayload {
   type: string;
   payload?: AnalysisResult;
+}
+
+// ✨ 새로운 크롤러 인터페이스 정의
+export interface ICrawler {
+  analyze(): AnalysisResult;
+  analyzeElements(elements: HTMLElement[]): CrawledItem[];
 }

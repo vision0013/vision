@@ -1,12 +1,11 @@
 // Voice Commands Barrel Exports
 
-// Processor
-export { VoiceCommandProcessor, type VoiceCommandResult } from './VoiceCommandProcessor';
+// Controller
+export { VoiceCommandProcessor, createVoiceCommandProcessor } from './controllers/voice-controller';
+export type { VoiceCommandResult } from './types/voice-types';
 
-// Actions
-export { clickAction } from './actions/clickAction';
-export { findAction } from './actions/findAction';
-
-// Utils
-export { ElementMatcher } from './utils/elementMatcher';
-export { PriorityResolver } from './utils/priorityResolver';
+// Process Functions  
+export { clickAction } from './process/click-action';
+export { findAction } from './process/find-action';
+export { ElementMatcher } from './process/element-matcher';
+export { PriorityResolver } from './process/priority-resolver';

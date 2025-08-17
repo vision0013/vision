@@ -1,3 +1,3 @@
 // Page Analysis Feature Exports
-export { PageCrawler } from './crawler';
-export { DynamicElementObserver } from './dynamicObserver';
+export { pageCrawler, analyze, analyzeElements } from './controllers/crawler-controller';
+export { DynamicElementObserver, createDynamicObserver } from './process/dynamic-observer';
