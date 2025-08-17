@@ -67,25 +67,48 @@ Chrome Extension
 ```
 src/
 ├── background/
-│   └── background.ts              # 메시지 라우팅
+│   └── background.ts                    # 메시지 라우팅
 ├── content/
-│   ├── content_script.tsx         # 메인 콘텐츠 스크립트
-│   ├── crawler.ts                 # 페이지 분석 로직
-│   └── voice-commands/            # 음성 명령 처리
-│       ├── index.ts               # VoiceCommandProcessor
-│       ├── config/
-│       │   └── priorities.ts      # 우선순위 설정
-│       ├── utils/
-│       │   ├── elementMatcher.ts  # 요소 매칭 로직
-│       │   └── priorityResolver.ts # 우선순위 해결
-│       └── actions/
-│           ├── clickAction.ts     # 클릭 동작
-│           └── findAction.ts      # 찾기 동작
-└── domains/side-panel/
-    ├── controllers/
-    │   └── useSidePanelController.ts  # 사이드 패널 제어
-    └── features/
-        └── voice-recognition/         # 음성 인식 기능
+│   └── content_script.tsx               # 메인 콘텐츠 스크립트
+├── features/                            # 기능별 모듈 (v4.6+)
+│   ├── index.ts                         # Features 배럴 파일
+│   ├── page-analysis/                   # 페이지 분석 기능
+│   │   ├── index.ts                     # 배럴 파일
+│   │   ├── crawler.ts                   # 크롤링 로직
+│   │   └── dynamicObserver.ts           # 동적 요소 감지
+│   ├── voice-commands/                  # 음성 명령 처리 (v4.7 리팩토링)
+│   │   ├── index.ts                     # 배럴 파일
+│   │   ├── VoiceCommandProcessor.ts     # 음성 명령 프로세서
+│   │   ├── config/
+│   │   │   └── priorities.ts            # 우선순위 설정
+│   │   ├── utils/
+│   │   │   ├── elementMatcher.ts        # 요소 매칭 로직
+│   │   │   └── priorityResolver.ts      # 우선순위 해결
+│   │   └── actions/
+│   │       ├── clickAction.ts           # 클릭 동작
+│   │       └── findAction.ts            # 찾기 동작
+│   ├── voice-recognition/               # 음성 인식 기능
+│   │   ├── index.ts                     # 배럴 파일
+│   │   ├── hook/
+│   │   │   └── useSpeechRecognition.ts  # 음성 인식 훅
+│   │   └── ui/
+│   │       └── TranscriptionDisplay.tsx # 음성 인식 UI
+│   ├── filtering/                       # 필터링 기능
+│   │   ├── index.ts                     # 배럴 파일
+│   │   └── ui/
+│   │       └── FilterControls.tsx       # 필터 컨트롤
+│   └── permissions/                     # 권한 관리
+│       ├── index.ts                     # 배럴 파일
+│       └── ui/
+│           └── PermissionsError.tsx     # 권한 오류 UI
+├── domains/side-panel/
+│   ├── controllers/
+│   │   └── useSidePanelController.ts    # 사이드 패널 제어
+│   └── sections/
+│       └── ui/
+│           └── SidePanel.tsx            # 사이드 패널 메인 UI
+└── types/
+    └── index.ts                         # 공통 타입 정의
 ```
 
 ## 🔄 주요 변경사항 (v4)
@@ -122,6 +145,184 @@ src/
 - ✅ **이중 크롤링 전략**: 깊은 중첩 구조에서도 링크/버튼 발견
 
 ## 🔄 주요 변경사항 (v4)
+
+## 🔄 주요 변경사항 (v4)
+
+```markdown
+### v4.5 - 멀티탭 독립 데이터 관리 및 실시간 DOM 변화 감지 🎯
+
+**문제**: 
+- 탭 전환 시 데이터가 섞이거나 초기화되는 문제
+- 무한 스크롤, AJAX 로딩 등 동적 콘텐츠 실시간 감지 한계
+- 각 탭별 필터/검색 상태가 유지되지 않음
+
+**해결책**:
+
+#### 1. 멀티탭 독립 데이터 관리 시스템
+```typescript
+// 각 탭별 독립적인 데이터 저장
+interface TabData {
+  analysisResult: AnalysisResult | null;
+  filter: string;
+  searchTerm: string;
+}
+
+// 탭별 데이터 맵으로 관리
+tabDataMap: { [tabId: number]: TabData };
+```
+
+#### 2. 실시간 탭 변화 감지
+```typescript
+// 크롬 탭 이벤트 리스너 추가
+chrome.tabs.onActivated.addListener(handleTabActivated);
+chrome.tabs.onUpdated.addListener(handleTabUpdated);
+```
+
+#### 3. 고성능 DOM 변화 감지 시스템
+```typescript
+// MutationObserver + 디바운싱 + 성능 측정
+export class DynamicElementObserver {
+  private lastMutationTime: number = 0;
+  
+  private handleMutations() {
+    const mutationStartTime = this.lastMutationTime;
+    // 300ms 디바운싱 후 처리
+    setTimeout(() => {
+      const analysisTime = performance.now() - mutationStartTime;
+      console.log(`⏱️ Timing: Total ${analysisTime.toFixed(1)}ms`);
+    }, 300);
+  }
+}
+```
+
+**구현된 기능들**:
+
+- ✅ **탭별 독립 상태**: 탭 A(상품 목록) + 탭 B(뉴스) 데이터 완전 분리
+- ✅ **필터/검색 상태 유지**: 탭별로 독립적인 필터링 및 검색어 보존
+- ✅ **실시간 DOM 감지**: 무한 스크롤, 드롭다운, 팝업 등 즉시 인식
+- ✅ **성능 최적화**: 디바운싱(300ms) + 재시도 로직으로 CPU 효율성 확보
+- ✅ **상세 성능 측정**: DOM 변화부터 분석 완료까지 정확한 시간 추적
+- ✅ **메모리 관리**: 탭 닫힘 감지로 자동 데이터 정리
+
+**동작 시나리오**:
+1. 탭 1 (쇼핑몰): 상품 20개 분석 + "button" 필터 적용
+2. 탭 2 (뉴스): 기사 30개 분석 + "link" 필터 적용  
+3. 탭 1로 복귀 → 상품 20개 + "button" 필터 상태 그대로 유지
+4. 무한 스크롤 → 추가 상품 10개 자동 감지하여 총 30개로 업데이트
+
+
+**성능 개선**:
+- **감지 속도**: DOM 변화 후 평균 300-500ms 내 감지 완료
+- **메모리 효율성**: 탭 닫힘 시 자동 정리로 메모리 누수 방지
+- **CPU 최적화**: 디바운싱으로 연속 변화를 배치 처리
+
+
+
+### v4.7 - 모듈 구조 리팩토링 및 배럴 파일 시스템 도입 🏗️
+
+**문제**: 
+- `voice-commands/index.ts`가 배럴 파일과 프로세서 클래스를 동시에 담당하여 모듈 충돌 발생
+- TypeScript에서 `'./voice-commands'` 모듈을 찾을 수 없다는 오류 발생
+- 코드 구조의 명확성 부족으로 유지보수성 저하
+
+**해결책**:
+
+#### 1. 파일 역할 분리
+```typescript
+// 기존: voice-commands/index.ts (혼재)
+export class VoiceCommandProcessor { ... }  // 프로세서 + 배럴 역할
+
+// 변경: 역할별 파일 분리
+voice-commands/VoiceCommandProcessor.ts     // 프로세서 전용
+voice-commands/index.ts                     // 배럴 파일 전용
+```
+
+#### 2. 배럴 파일 시스템 도입
+```typescript
+// voice-commands/index.ts - 새로운 배럴 파일
+export { VoiceCommandProcessor, type VoiceCommandResult } from './VoiceCommandProcessor';
+export { clickAction } from './actions/clickAction';
+export { findAction } from './actions/findAction';
+export { ElementMatcher } from './utils/elementMatcher';
+export { PriorityResolver } from './utils/priorityResolver';
+```
+
+#### 3. features 모듈 통합
+```typescript
+// src/features/index.ts
+export * from './page-analysis';
+export * from './voice-commands';      // 이제 정상 작동
+export * from './voice-recognition';
+export * from './filtering';
+export * from './permissions';
+```
+
+**구현된 기능들**:
+
+- ✅ **모듈 구조 명확화**: 각 파일의 역할과 책임 분리
+- ✅ **배럴 파일 시스템**: 모든 하위 모듈을 깔끔하게 export
+- ✅ **TypeScript 오류 해결**: 모듈 해석 문제 완전 해결
+- ✅ **유지보수성 향상**: 코드 구조가 더 직관적이고 관리하기 쉬워짐
+- ✅ **확장성 개선**: 새로운 액션이나 유틸리티 추가가 용이해짐
+
+**파일 구조 변경**:
+```diff
+src/features/voice-commands/
+- ├── index.ts                    # VoiceCommandProcessor + 배럴 (혼재)
++ ├── VoiceCommandProcessor.ts    # 프로세서 전용
++ ├── index.ts                    # 배럴 파일 전용
+  ├── actions/
+  ├── utils/
+  └── config/
+```
+
+**이점**:
+- **개발 경험 향상**: IDE에서 모듈 자동완성이 정확히 작동
+- **코드 가독성**: 각 파일의 목적이 명확하게 구분됨
+- **확장성**: 새로운 모듈 추가 시 배럴 파일만 수정하면 됨
+- **타입 안전성**: TypeScript 컴파일 오류 없이 안정적인 빌드
+
+### v4.6 - features 디렉토리 통합 아키텍처 도입 📁
+
+**문제**: 
+- 기능별 코드가 여러 디렉토리에 분산되어 관리 복잡성 증가
+- 새로운 기능 추가 시 파일 위치 혼동 및 중복 코드 발생
+- 모듈 간 의존성 관리의 어려움
+
+**해결책**:
+
+#### 1. features 중심 아키텍처 도입
+```typescript
+src/features/
+├── page-analysis/          # 페이지 분석 기능
+├── voice-commands/         # 음성 명령 처리
+├── voice-recognition/      # 음성 인식 기능  
+├── filtering/             # 필터링 기능
+└── permissions/           # 권한 관리
+```
+
+#### 2. 기능별 모듈 완전 독립화
+```typescript
+// 각 기능은 독립적인 index.ts를 가지며
+// 외부에서는 features/index.ts를 통해서만 접근
+export * from './page-analysis';
+export * from './voice-commands';
+// ...
+```
+
+#### 3. 기존 content/voice-commands를 features로 이전
+```typescript
+// 기존: src/content/voice-commands/
+// 이전: src/features/voice-commands/
+```
+
+**구현된 기능들**:
+
+- ✅ **기능 중심 구조**: 관련 기능들이 하나의 디렉토리에 집중
+- ✅ **모듈 독립성**: 각 기능이 독립적으로 테스트 및 개발 가능
+- ✅ **확장성**: 새 기능 추가 시 features 디렉토리에만 추가
+- ✅ **중앙집중식 export**: features/index.ts를 통한 통합 관리
+- ✅ **코드 재사용성**: 기능 간 공통 유틸리티 분리 및 공유
 
 ### v4.4 - 이벤트 기반 SPA 내비게이션 감지로 전환 🎯
 
@@ -222,13 +423,14 @@ npm run build
 ## 📝 개발 노트
 
 ### 음성 명령 추가하기
-1. `src/content/voice-commands/index.ts`에서 키워드 추가
-2. `src/content/voice-commands/actions/`에 새 액션 파일 생성
-3. `src/content/voice-commands/config/priorities.ts`에서 우선순위 설정
-4. 타입 정의 업데이트
+1. `src/features/voice-commands/VoiceCommandProcessor.ts`에서 키워드 추가
+2. `src/features/voice-commands/actions/`에 새 액션 파일 생성
+3. `src/features/voice-commands/config/priorities.ts`에서 우선순위 설정
+4. `src/features/voice-commands/index.ts`에서 새 모듈 export
+5. 타입 정의 업데이트
 
 ### 우선순위 설정 커스터마이징
-`src/content/voice-commands/config/priorities.ts`에서 다음을 조정할 수 있습니다:
+`src/features/voice-commands/config/priorities.ts`에서 다음을 조정할 수 있습니다:
 - **타입별 우선순위**: button, link, text, image 점수
 - **역할별 우선순위**: main, nav, header, footer 점수  
 - **키워드별 가중치**: 특정 단어에 대한 맞춤 설정

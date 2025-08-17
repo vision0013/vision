@@ -3,9 +3,11 @@ export interface BoundingBox {
   left: number;
   width: number;
   height: number;
+    hidden?: boolean;  // 숨겨진 상태
+
 }
 
-export type ItemType = 'text' | 'image' | 'link' | 'button';
+export type ItemType = 'text' | 'image' | 'link' | 'button' |'container';
 
 export interface CrawledItem {
   id: number;
@@ -22,6 +24,8 @@ export interface CrawledItem {
   src?: string;
   href?: string;
   label?: string;
+    hidden?: boolean;  // 숨겨진 상태 플래그
+
 }
 
 export interface AnalysisResult {
@@ -30,6 +34,11 @@ export interface AnalysisResult {
   visited: number;
   elapsedMs: number;
   items: CrawledItem[];
+    stats?: {
+    total: number;
+    visible: number;
+    hidden: number;
+  };
 }
 
 export interface MessagePayload {

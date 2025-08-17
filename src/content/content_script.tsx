@@ -1,105 +1,279 @@
-// content_script.tsx
-import { PageCrawler } from './crawler';
-import { VoiceCommandProcessor } from './voice-commands';
+// content_script.tsx - 전체 코드 (상세 디버깅 버전)
+import { PageCrawler, DynamicElementObserver } from '../features/page-analysis';
+import { VoiceCommandProcessor } from '../features/voice-commands';
 
-// --- 전역 변수 ---
+// =============================================
+// 전역 변수 선언
+// =============================================
 let highlightedElement: HTMLElement | null = null;
 let currentAnalysisResult: any = null;
+let dynamicObserver: DynamicElementObserver | null = null;
 
 const crawler = new PageCrawler();
 const voiceCommandProcessor = new VoiceCommandProcessor();
 
-/**
- * URL 변경을 감지하고 background에 확인 요청
- */
-const handleUrlChange = () => {
-  console.log('🔍 URL change detected:', window.location.href);
-  chrome.runtime.sendMessage({ action: 'checkUrl', url: window.location.href });
+// =============================================
+// 안전한 메시지 전송 함수 (재시도 로직 포함)
+// =============================================
+const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {
+  console.log('📤 Attempting to send message:', message.action);
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await chrome.runtime.sendMessage(message);
+      console.log('✅ Message sent successfully:', message.action);
+      return true;
+    } catch (error: any) {
+      if (error.message.includes('Extension context invalidated') || 
+          error.message.includes('Receiving end does not exist')) {
+        
+        console.log(`🔄 Attempt ${i + 1}/${maxRetries}: Extension not ready, waiting...`);
+        
+        if (i < maxRetries - 1) {
+          // 지수 백오프: 100ms, 200ms, 400ms 간격으로 재시도
+          const waitTime = 100 * Math.pow(2, i);
+          console.log(`⏰ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      } else {
+        console.error('❌ Unexpected runtime error:', error);
+        return false;
+      }
+    }
+  }
+  
+  console.log(`❌ Failed to connect to extension after ${maxRetries} attempts for:`, message.action);
+  return false;
 };
 
-/**
- * 페이지를 크롤링하고 결과를 백그라운드로 전송하는 함수
- */
-const runCrawler = () => {
+// =============================================
+// URL 변경 감지 및 백그라운드 알림
+// =============================================
+const handleUrlChange = async () => {
+  console.log('🔍 URL change detected:', window.location.href);
+  console.log('📡 Notifying background script of URL change...');
+  
+  const success = await safeRuntimeMessage({ 
+    action: 'checkUrl', 
+    url: window.location.href 
+  });
+  
+  if (success) {
+    console.log('✅ Background script notified of URL change');
+  } else {
+    console.log('❌ Failed to notify background script of URL change');
+  }
+};
+
+// =============================================
+// 페이지 크롤링 및 동적 감지 시작
+// =============================================
+const runCrawler = async () => {
   console.log('🔄 Page analysis started for:', window.location.href);
+  console.log('🧹 Cleaning up existing observer...');
+  
+  // 기존 observer 정리
+  if (dynamicObserver) {
+    dynamicObserver.stop();
+    console.log('🛑 Previous observer stopped');
+  }
+  
+  // 페이지 분석 실행
+  console.log('🔍 Starting full page crawl...');
+  const crawlStartTime = performance.now();
   const analysisResult = crawler.analyze();
+  const crawlEndTime = performance.now();
+  
+  console.log(`⚡ Full crawl completed in ${(crawlEndTime - crawlStartTime).toFixed(1)}ms`);
+  console.log(`📊 Found ${analysisResult.items.length} items total`);
+  
   currentAnalysisResult = analysisResult;
   
-  chrome.runtime.sendMessage({ action: 'crawlComplete', data: analysisResult });
+  // 백그라운드로 결과 전송
+  console.log('📤 Sending crawl results to background...');
+  const success = await safeRuntimeMessage({ 
+    action: 'crawlComplete', 
+    data: analysisResult 
+  });
+  
+  if (success) {
+    console.log('✅ Crawl results sent successfully');
+    
+    // 성공한 경우에만 동적 감지 시작
+    console.log('🚀 Starting dynamic element observer...');
+    
+    dynamicObserver = new DynamicElementObserver(crawler, async (newItems) => {
+      console.log('🆕 DynamicObserver callback triggered');
+      console.log(`📈 Found ${newItems.length} new dynamic items:`, newItems);
+      
+      // 새 아이템들의 상세 정보 로깅
+      newItems.forEach((item, index) => {
+        console.log(`  ${index + 1}. ${item.type}: "${item.text || item.label || item.alt}" (${item.tag})`);
+      });
+      
+      console.log('📤 Sending new items to background...');
+      const itemSuccess = await safeRuntimeMessage({ 
+        action: 'addNewItems', 
+        data: newItems 
+      });
+      
+      if (itemSuccess) {
+        console.log('✅ New items sent successfully');
+      } else {
+        console.log('❌ Failed to send new items');
+      }
+    });
+    
+    dynamicObserver.start();
+    console.log('🔍 Dynamic element observer started for:', window.location.href);
+  } else {
+    console.log('❌ Failed to send crawl results, skipping observer setup');
+  }
 };
 
-/**
- * 요소를 하이라이트하는 함수
- */
+// =============================================
+// 요소 하이라이트 함수
+// =============================================
 const highlightElementById = (ownerId: number) => {
+  console.log(`🎯 Highlighting element with ownerId: ${ownerId}`);
+  
   const element = document.querySelector(`[data-crawler-id="${ownerId}"]`) as HTMLElement;
+  
   if (element) {
+    console.log('✅ Element found:', {
+      tag: element.tagName,
+      text: element.textContent?.slice(0, 50),
+      classes: element.className
+    });
+    
+    // 기존 하이라이트 제거
     if (highlightedElement) {
+      console.log('🧹 Removing previous highlight');
       highlightedElement.style.outline = '';
       highlightedElement.style.boxShadow = '';
     }
+    
+    // 새 요소 하이라이트
+    console.log('🌟 Applying highlight and scrolling to element');
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     element.style.outline = '3px solid #007AFF';
     element.style.boxShadow = '0 0 15px rgba(0, 122, 255, 0.5)';
     highlightedElement = element;
+    
+    // 2.5초 후 하이라이트 제거
     setTimeout(() => {
       if (highlightedElement === element) {
-         element.style.outline = '';
-         element.style.boxShadow = '';
-         highlightedElement = null;
+        console.log('⏰ Removing highlight after timeout');
+        element.style.outline = '';
+        element.style.boxShadow = '';
+        highlightedElement = null;
       }
     }, 2500);
+  } else {
+    console.log(`❌ Element not found with ownerId: ${ownerId}`);
   }
 };
 
-// --- URL 변경 감지 설정 ---
+// =============================================
+// URL 변경 감지 설정 (SPA 대응)
+// =============================================
+console.log('🔧 Setting up URL change detection...');
 
 // 1. History API 메서드 가로채기 (SPA 내비게이션)
 const originalPushState = history.pushState;
 const originalReplaceState = history.replaceState;
 
 history.pushState = function(...args) {
+  console.log('📍 pushState detected');
   originalPushState.apply(history, args);
-  handleUrlChange();
+  handleUrlChange(); // async 함수지만 백그라운드 실행
 };
 
 history.replaceState = function(...args) {
+  console.log('📍 replaceState detected'); 
   originalReplaceState.apply(history, args);
   handleUrlChange();
 };
 
 // 2. 뒤로가기/앞으로가기 감지
-window.addEventListener('popstate', handleUrlChange);
+window.addEventListener('popstate', () => {
+  console.log('📍 popstate event detected');
+  handleUrlChange();
+});
 
 // 3. 새로운 Navigation API (Chrome 102+) - 타입 체크 추가
 if ('navigation' in window && (window as any).navigation) {
   const navigation = (window as any).navigation;
   if (navigation && typeof navigation.addEventListener === 'function') {
-    navigation.addEventListener('navigate', handleUrlChange);
+    console.log('🆕 Navigation API available, setting up listener');
+    navigation.addEventListener('navigate', () => {
+      console.log('📍 Navigation API navigate event detected');
+      handleUrlChange();
+    });
   }
+} else {
+  console.log('📱 Navigation API not available (older Chrome)');
 }
 
-// --- 메시지 리스너 ---
+console.log('✅ URL change detection setup complete');
+
+// =============================================
+// 크롬 메시지 리스너
+// =============================================
+console.log('📡 Setting up message listeners...');
+
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
-  if (request.action === 'runCrawler') {
-    runCrawler();
-  }
+  console.log('📨 Message received:', request.action);
   
-  if (request.action === 'highlightElement') {
-    highlightElementById(request.ownerId);
-  }
-  
-  if (request.action === 'processVoiceCommand') {
-    if (currentAnalysisResult?.items) {
-      voiceCommandProcessor.processCommand(request.command, currentAnalysisResult.items);
+  try {
+    if (request.action === 'runCrawler') {
+      console.log('🔄 Processing runCrawler command');
+      runCrawler();
     }
+    
+    if (request.action === 'highlightElement') {
+      console.log('🎯 Processing highlightElement command for ownerId:', request.ownerId);
+      highlightElementById(request.ownerId);
+    }
+    
+    if (request.action === 'processVoiceCommand') {
+      console.log('🎤 Processing voice command:', request.command);
+      
+      if (currentAnalysisResult?.items) {
+        console.log(`📊 Processing command with ${currentAnalysisResult.items.length} items available`);
+        const result = voiceCommandProcessor.processCommand(request.command, currentAnalysisResult.items);
+        console.log('🎯 Voice command result:', result);
+      } else {
+        console.log('❌ No analysis result available for voice command');
+      }
+    }
+  } catch (error: any) {
+    if (error.message.includes('Extension context invalidated')) {
+      console.log('🔄 Extension context invalidated in message listener');
+      return;
+    }
+    console.error('❌ Message listener error:', error);
   }
 });
 
-// --- 초기 실행 ---
+console.log('✅ Message listeners setup complete');
+
+// =============================================
+// 페이지 언로드 시 정리
+// =============================================
+window.addEventListener('beforeunload', () => {
+  console.log('👋 Page unloading, cleaning up...');
+  if (dynamicObserver) {
+    dynamicObserver.stop();
+    console.log('🛑 Observer stopped before page unload');
+  }
+});
+
+// =============================================
+// 초기 실행
+// =============================================
+console.log('🚀 Content script initialization complete');
+console.log('🔄 Starting initial page crawl...');
+
 // 페이지 최초 로드 시 즉시 크롤링
 runCrawler();
-
-// --- Fallback: 혹시 모를 놓친 변경 대비 (선택사항) ---
-// 10초마다 한 번씩만 체크 (매우 낮은 빈도)
-setInterval(handleUrlChange, 10000);

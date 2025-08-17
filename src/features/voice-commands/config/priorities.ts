@@ -25,9 +25,10 @@ export const ELEMENT_PRIORITIES: PriorityConfig = {
   // 타입별 우선순위
   type: {
     'button': 100,    // 버튼이 최우선
-    'link': 80,       // 링크 두 번째
-    'text': 60,       // 일반 텍스트 세 번째
-    'image': 40       // 이미지 네 번째
+    'link': 80,       // 링크 2번째
+    'text': 60,       // 일반 텍스트 3번째
+    'image': 40,       // 이미지 4번째
+    'container' : 20 // 컨테이너 5번째
   },
   
   // 역할별 우선순위

@@ -1,64 +1,122 @@
 import { create } from 'zustand';
 import { AnalysisResult, CrawledItem } from '../../../../types';
 
-interface SidePanelState {
+interface TabData {
   analysisResult: AnalysisResult | null;
   filter: string;
   searchTerm: string;
+}
+
+interface SidePanelState {
+  // ✨ 멀티탭 구조로 변경
+  tabDataMap: { [tabId: number]: TabData };
   activeTabId: number | null;
-  setAnalysisResult: (result: AnalysisResult | null) => void;
-  // ✨ 1. 새로운 아이템을 추가하는 액션 타입 정의
-  addAnalysisItems: (newItems: CrawledItem[]) => void;
-  setFilter: (filter: string) => void;
-  setSearchTerm: (term: string) => void;
+  
+  setAnalysisResult: (result: AnalysisResult | null, tabId?: number) => void;
+  addAnalysisItems: (newItems: CrawledItem[], tabId?: number) => void;
+  setFilter: (filter: string, tabId?: number) => void;
+  setSearchTerm: (term: string, tabId?: number) => void;
   setActiveTabId: (id: number | null) => void;
-  getFilteredItems: () => CrawledItem[];
+  getFilteredItems: (tabId?: number) => CrawledItem[];
 }
 
 export const useSidePanelStore = create<SidePanelState>((set, get) => ({
-  analysisResult: null,
-  filter: 'all',
-  searchTerm: '',
+  tabDataMap: {},
   activeTabId: null,
 
-  setAnalysisResult: (result) => {
-    set({ analysisResult: result });
+  setAnalysisResult: (result, tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId) return;
+
+    set((state) => ({
+      tabDataMap: {
+        ...state.tabDataMap,
+        [currentTabId]: {
+          ...state.tabDataMap[currentTabId],
+          analysisResult: result,
+          filter: state.tabDataMap[currentTabId]?.filter || 'all',
+          searchTerm: state.tabDataMap[currentTabId]?.searchTerm || '',
+        },
+      },
+    }));
   },
   
-  // ✨ 2. 새로운 액션 구현
-  addAnalysisItems: (newItems) => set((state) => {
-    if (!state.analysisResult || newItems.length === 0) {
-      return {}; // 기존 상태 유지
-    }
+  addAnalysisItems: (newItems, tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId || newItems.length === 0) return;
 
-    // 새 아이템을 기존 목록에 추가
-    const updatedItems = [...state.analysisResult.items, ...newItems];
+    set((state) => {
+      const currentTabData = state.tabDataMap[currentTabId];
+      if (!currentTabData?.analysisResult) return state;
 
-    // 현재 analysisResult 상태를 새로운 아이템 목록으로 업데이트
-    return {
-      analysisResult: {
-        ...state.analysisResult,
-        items: updatedItems,
+      const updatedItems = [...currentTabData.analysisResult.items, ...newItems];
+      
+      return {
+        tabDataMap: {
+          ...state.tabDataMap,
+          [currentTabId]: {
+            ...currentTabData,
+            analysisResult: {
+              ...currentTabData.analysisResult,
+              items: updatedItems,
+            },
+          },
+        },
+      };
+    });
+  },
+
+  setFilter: (filter, tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId) return;
+
+    set((state) => ({
+      tabDataMap: {
+        ...state.tabDataMap,
+        [currentTabId]: {
+          ...state.tabDataMap[currentTabId],
+          analysisResult: state.tabDataMap[currentTabId]?.analysisResult || null,
+          filter,
+          searchTerm: state.tabDataMap[currentTabId]?.searchTerm || '',
+        },
       },
-    };
-  }),
+    }));
+  },
 
-  setFilter: (filter) => set({ filter }),
-  setSearchTerm: (term) => set({ searchTerm: term }),
+  setSearchTerm: (term, tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId) return;
+
+    set((state) => ({
+      tabDataMap: {
+        ...state.tabDataMap,
+        [currentTabId]: {
+          ...state.tabDataMap[currentTabId],
+          analysisResult: state.tabDataMap[currentTabId]?.analysisResult || null,
+          filter: state.tabDataMap[currentTabId]?.filter || 'all',
+          searchTerm: term,
+        },
+      },
+    }));
+  },
+
   setActiveTabId: (id) => set({ activeTabId: id }),
 
-  getFilteredItems: () => {
-    const { analysisResult, filter, searchTerm } = get();
-    if (!analysisResult) return [];
+  getFilteredItems: (tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId) return [];
 
-    let items = analysisResult.items;
+    const tabData = get().tabDataMap[currentTabId];
+    if (!tabData?.analysisResult) return [];
 
-    if (filter !== 'all') {
-      items = items.filter(item => item.type === filter);
+    let items = tabData.analysisResult.items;
+
+    if (tabData.filter !== 'all') {
+      items = items.filter(item => item.type === tabData.filter);
     }
 
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
+    if (tabData.searchTerm) {
+      const searchLower = tabData.searchTerm.toLowerCase();
       items = items.filter(item =>
         item.text?.toLowerCase().includes(searchLower) ||
         item.alt?.toLowerCase().includes(searchLower) ||

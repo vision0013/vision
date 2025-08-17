@@ -3,9 +3,9 @@
 import React from 'react';
 import './SidePanel.css';
 import { useSidePanelController } from '../../controllers/useSidePanelController';
-import { TranscriptionDisplay } from '../../features/voice-recognition/ui/TranscriptionDisplay';
-import { FilterControls } from '../../features/filter-items/ui/FilterControls';
-import { PermissionsError } from '../../features/permissions/ui/PermissionsError'; // 임포트
+import { TranscriptionDisplay } from '../../../../features';
+import { FilterControls } from '../../../../features';
+import { PermissionsError } from '../../../../features';
 import { Header } from './Header';
 import { Stats } from './Stats';
 import { ResultsList } from './ResultsList';

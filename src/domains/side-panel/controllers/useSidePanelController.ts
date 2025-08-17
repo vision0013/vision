@@ -1,21 +1,25 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useSidePanelStore } from './store';
-import { useSpeechRecognition } from '../features/voice-recognition/hook/useSpeechRecognition';
+import { useSpeechRecognition } from '../../../features';
 
 export const useSidePanelController = () => {
   const {
-    analysisResult,
     activeTabId,
+    tabDataMap,
     setAnalysisResult,
-    // ✨ 1. 새로 만든 스토어 액션 가져오기
     addAnalysisItems,
     setActiveTabId,
     getFilteredItems,
-    filter,
-    searchTerm,
     setFilter,
     setSearchTerm,
   } = useSidePanelStore();
+
+  // ✨ 현재 탭의 데이터를 직접 구독하여 탭 변경시 자동 업데이트
+  const currentTabData = activeTabId && tabDataMap[activeTabId] 
+    ? tabDataMap[activeTabId] 
+    : { analysisResult: null, filter: 'all', searchTerm: '' };
+  
+  const { analysisResult, filter, searchTerm } = currentTabData;
 
   const analysisResultRef = useRef(analysisResult);
   const activeTabIdRef = useRef(activeTabId);
@@ -28,30 +32,50 @@ export const useSidePanelController = () => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
 
-
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) setActiveTabId(tabs[0].id);
     });
+
+    // 탭 변경 감지
+    const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => {
+      setActiveTabId(activeInfo.tabId);
+    };
+
+    const handleTabUpdated = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (changeInfo.status === 'complete' && tab.active) {
+        setActiveTabId(tabId);
+      }
+    };
+
+    chrome.tabs.onActivated.addListener(handleTabActivated);
+    chrome.tabs.onUpdated.addListener(handleTabUpdated);
     
     const messageListener = (request: any) => {
       // 기존 전체 업데이트 로직
       if (request.action === 'updatePanelData') {
-        console.log('🔄 Side Panel: Received full update with', request.data.items.length, 'items');
-        setAnalysisResult(request.data);
+        console.log('📨 [SIDE-PANEL] Received updatePanelData with', request.data.items.length, 'items');
+        console.log('📨 [SIDE-PANEL] Current active tab ID:', activeTabIdRef.current);
+        // 현재 활성 탭 ID 전달
+        setAnalysisResult(request.data, activeTabIdRef.current || undefined);
+        console.log('✅ [SIDE-PANEL] Analysis result updated');
       } 
       
       // ✨ 2. 새로운 아이템 추가 로직
       else if (request.action === 'addNewItems') {
         console.log('🔄 Side Panel: Received', request.data.length, 'new items to add.');
-        addAnalysisItems(request.data);
+        // 현재 활성 탭 ID 전달
+        addAnalysisItems(request.data, activeTabIdRef.current || undefined);
       }
     };
     
     chrome.runtime.onMessage.addListener(messageListener);
-    return () => chrome.runtime.onMessage.removeListener(messageListener);
-    
-    // ✨ 3. 의존성 배열에 addAnalysisItems 추가
+
+    return () => {
+      chrome.tabs.onActivated.removeListener(handleTabActivated);
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
   }, [setActiveTabId, setAnalysisResult, addAnalysisItems]);
 
   const handleItemClick = (ownerId: number) => {
@@ -62,7 +86,6 @@ export const useSidePanelController = () => {
 
   const handleVoiceCommand = useCallback((command: string) => {
     const currentTabId = activeTabIdRef.current;
-    // ✨ 중요: content_script와 동기화된 최신 analysisResult를 ref에서 직접 참조합니다.
     const currentAnalysisResult = analysisResultRef.current;
     
     console.log('🎤 Voice command received:', command);
@@ -77,7 +100,7 @@ export const useSidePanelController = () => {
       command: command,
       tabId: currentTabId
     });
-  }, []); // 의존성 배열은 비워둡니다.
+  }, []);
 
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 
@@ -95,10 +118,10 @@ export const useSidePanelController = () => {
   return {
     analysisResult,
     filter,
-    onFilterChange: setFilter,
+    onFilterChange: (filter: string) => setFilter(filter, activeTabId || undefined),
     searchTerm,
-    onSearchTermChange: setSearchTerm,
-    filteredItems: getFilteredItems(),
+    onSearchTermChange: (term: string) => setSearchTerm(term, activeTabId || undefined),
+    filteredItems: getFilteredItems(activeTabId || undefined),
     onItemClick: handleItemClick,
     isListening,
     transcribedText,
