@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Voice & Vision Web Assistant",
-  "version": "1.0",
+  "version": "4.9.0",
   "description": "A Chrome extension to analyze and interact with web pages using voice and vision.",
   "permissions": [
     "sidePanel",
