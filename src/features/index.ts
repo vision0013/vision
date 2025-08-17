@@ -14,3 +14,6 @@ export * from './filtering';
 
 // Permissions
 export * from './permissions';
+
+// Highlighting
+export * from './highlighting'; 

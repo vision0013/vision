@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useSidePanelStore } from './store';
-import { useSpeechRecognition } from '../../../features';
+import { useSpeechRecognition, requestHighlight } from '../../../features'; // 👈 requestHighlight 추가
+
 
 export const useSidePanelController = () => {
   const {
@@ -80,7 +81,7 @@ export const useSidePanelController = () => {
 
   const handleItemClick = (ownerId: number) => {
     if (activeTabId) {
-      chrome.runtime.sendMessage({ action: 'highlightElement', tabId: activeTabId, ownerId: ownerId });
+      requestHighlight(activeTabId, ownerId);
     }
   };
 

@@ -7,11 +7,16 @@ interface ResultsListProps {
 }
 
 export const ResultsList: React.FC<ResultsListProps> = ({ items, onItemClick }) => {
+  // ✨ [수정] 컨테이너를 제외한, 실제 화면에 표시될 아이템 목록을 미리 계산합니다.
+  const visibleItems = items.filter(item => item.type !== 'container');
+
   return (
     <div className="results">
-      <div className="results-header">Showing {items.length} items</div>
+      {/* ✨ [수정] 헤더에 표시되는 아이템 개수도 실제 보이는 요소들의 개수를 기준으로 변경합니다. */}
+      <div className="results-header">Showing {visibleItems.length} items</div>
       <div className="items-list">
-        {items.slice(0, 100).map((item) => (
+        {/* ✨ [수정] 기존 items 배열 대신, 컨테이너가 필터링된 visibleItems 배열을 사용하여 목록을 그립니다. */}
+        {visibleItems.slice(0, 100).map((item) => (
           <div
             key={item.id}
             className={`item item-${item.type}`}

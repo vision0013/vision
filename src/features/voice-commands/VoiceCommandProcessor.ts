@@ -1,4 +1,6 @@
 import { CrawledItem } from "../../types";
+import { HighlightManager } from "../highlighting"; // 👈 추가
+
 import { clickAction } from "./actions/clickAction";
 import { findAction } from "./actions/findAction";
 
@@ -9,6 +11,12 @@ export type VoiceCommandResult =
   | { type: "not_found" };
 
 export class VoiceCommandProcessor {
+    private highlightManager: HighlightManager; // 👈 추가
+
+      // 👈 생성자에서 HighlightManager 인스턴스를 받음
+  constructor(highlightManager: HighlightManager) {
+    this.highlightManager = highlightManager;
+  }
   processCommand(command: string, items: CrawledItem[]): VoiceCommandResult {
     const lowerCommand = command.toLowerCase();
     
@@ -42,10 +50,10 @@ export class VoiceCommandProcessor {
         return clickAction(targetText, items);
           
       case '찾아줘':
-        return findAction(targetText, items);
+        return findAction(targetText, items, this.highlightManager);
           
       default:
-        return findAction(targetText, items);
+        return findAction(targetText, items, this.highlightManager);
     }
   }
 }

@@ -1,16 +1,18 @@
 // content_script.tsx - 전체 코드 (상세 디버깅 버전)
 import { PageCrawler, DynamicElementObserver } from '../features/page-analysis';
 import { VoiceCommandProcessor } from '../features/voice-commands';
+import { HighlightManager } from '../features/highlighting'; // 👈 추가
+
 
 // =============================================
 // 전역 변수 선언
 // =============================================
-let highlightedElement: HTMLElement | null = null;
 let currentAnalysisResult: any = null;
 let dynamicObserver: DynamicElementObserver | null = null;
 
 const crawler = new PageCrawler();
-const voiceCommandProcessor = new VoiceCommandProcessor();
+const highlightManager = new HighlightManager(); // 👈 HighlightManager 인스턴스 생성
+const voiceCommandProcessor = new VoiceCommandProcessor(highlightManager); // 👈 인스턴스 전달
 
 // =============================================
 // 안전한 메시지 전송 함수 (재시도 로직 포함)
@@ -134,45 +136,7 @@ const runCrawler = async () => {
 // =============================================
 // 요소 하이라이트 함수
 // =============================================
-const highlightElementById = (ownerId: number) => {
-  console.log(`🎯 Highlighting element with ownerId: ${ownerId}`);
-  
-  const element = document.querySelector(`[data-crawler-id="${ownerId}"]`) as HTMLElement;
-  
-  if (element) {
-    console.log('✅ Element found:', {
-      tag: element.tagName,
-      text: element.textContent?.slice(0, 50),
-      classes: element.className
-    });
-    
-    // 기존 하이라이트 제거
-    if (highlightedElement) {
-      console.log('🧹 Removing previous highlight');
-      highlightedElement.style.outline = '';
-      highlightedElement.style.boxShadow = '';
-    }
-    
-    // 새 요소 하이라이트
-    console.log('🌟 Applying highlight and scrolling to element');
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    element.style.outline = '3px solid #007AFF';
-    element.style.boxShadow = '0 0 15px rgba(0, 122, 255, 0.5)';
-    highlightedElement = element;
-    
-    // 2.5초 후 하이라이트 제거
-    setTimeout(() => {
-      if (highlightedElement === element) {
-        console.log('⏰ Removing highlight after timeout');
-        element.style.outline = '';
-        element.style.boxShadow = '';
-        highlightedElement = null;
-      }
-    }, 2500);
-  } else {
-    console.log(`❌ Element not found with ownerId: ${ownerId}`);
-  }
-};
+
 
 // =============================================
 // URL 변경 감지 설정 (SPA 대응)
@@ -231,11 +195,18 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
       runCrawler();
     }
     
+    // 👇 하이라이트 요청 처리 부분을 HighlightManager를 사용하도록 변경
     if (request.action === 'highlightElement') {
       console.log('🎯 Processing highlightElement command for ownerId:', request.ownerId);
-      highlightElementById(request.ownerId);
+      const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
+      if (element) {
+        highlightManager.apply(element);
+      } else {
+        console.log(`❌ Element not found with ownerId: ${request.ownerId}`);
+      }
     }
     
+   // 👇 음성 명령 처리 부분은 이제 voiceCommandProcessor가 알아서 하이라이트 처리
     if (request.action === 'processVoiceCommand') {
       console.log('🎤 Processing voice command:', request.command);
       
