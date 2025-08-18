@@ -1,16 +1,14 @@
 // content_script.tsx - 전체 코드 (상세 디버깅 버전)
-import { pageCrawler, DynamicElementObserver } from '../features/page-analysis';
-import { VoiceCommandProcessor } from '../features/voice-commands';
-import { HighlightManager } from '../features/highlighting'; // 👈 추가
+import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis';
+import { processVoiceCommand } from '../features/voice-commands';
+import { applyHighlightToElement } from '../features/highlighting';
 
 
 // =============================================
 // 전역 변수 선언
 // =============================================
 let currentAnalysisResult: any = null;
-let dynamicObserver: DynamicElementObserver | null = null;
-const highlightManager = new HighlightManager(); // 👈 HighlightManager 인스턴스 생성
-const voiceCommandProcessor = new VoiceCommandProcessor(highlightManager); // 👈 인스턴스 전달
+let dynamicObserverActive = false;
 
 // =============================================
 // 안전한 메시지 전송 함수 (재시도 로직 포함)
@@ -73,8 +71,9 @@ const runCrawler = async () => {
   console.log('🧹 Cleaning up existing observer...');
   
   // 기존 observer 정리
-  if (dynamicObserver) {
-    dynamicObserver.stop();
+  if (dynamicObserverActive) {
+    stopDynamicObserver();
+    dynamicObserverActive = false;
     console.log('🛑 Previous observer stopped');
   }
   
@@ -102,12 +101,12 @@ const runCrawler = async () => {
     // 성공한 경우에만 동적 감지 시작
     console.log('🚀 Starting dynamic element observer...');
     
-    dynamicObserver = new DynamicElementObserver(pageCrawler, async (newItems) => {
+    startDynamicObserver(pageCrawler, async (newItems: any) => {
       console.log('🆕 DynamicObserver callback triggered');
       console.log(`📈 Found ${newItems.length} new dynamic items:`, newItems);
       
       // 새 아이템들의 상세 정보 로깅
-      newItems.forEach((item, index) => {
+      newItems.forEach((item: any, index: any) => {
         console.log(`  ${index + 1}. ${item.type}: "${item.text || item.label || item.alt}" (${item.tag})`);
       });
       
@@ -124,7 +123,7 @@ const runCrawler = async () => {
       }
     });
     
-    dynamicObserver.start();
+    dynamicObserverActive = true;
     console.log('🔍 Dynamic element observer started for:', window.location.href);
   } else {
     console.log('❌ Failed to send crawl results, skipping observer setup');
@@ -198,7 +197,7 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
       console.log('🎯 Processing highlightElement command for ownerId:', request.ownerId);
       const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
       if (element) {
-        highlightManager.apply(element);
+        applyHighlightToElement(element);
       } else {
         console.log(`❌ Element not found with ownerId: ${request.ownerId}`);
       }
@@ -210,7 +209,7 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
       
       if (currentAnalysisResult?.items) {
         console.log(`📊 Processing command with ${currentAnalysisResult.items.length} items available`);
-        const result = voiceCommandProcessor.processCommand(request.command, currentAnalysisResult.items);
+        const result = processVoiceCommand(request.command, currentAnalysisResult.items);
         console.log('🎯 Voice command result:', result);
       } else {
         console.log('❌ No analysis result available for voice command');
@@ -232,8 +231,9 @@ console.log('✅ Message listeners setup complete');
 // =============================================
 window.addEventListener('beforeunload', () => {
   console.log('👋 Page unloading, cleaning up...');
-  if (dynamicObserver) {
-    dynamicObserver.stop();
+  if (dynamicObserverActive) {
+    stopDynamicObserver();
+    dynamicObserverActive = false;
     console.log('🛑 Observer stopped before page unload');
   }
 });

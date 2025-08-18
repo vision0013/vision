@@ -1,22 +1,18 @@
 import { CrawledItem } from "../../../types";
 import { VoiceCommandResult } from "../types/voice-types";
-import { HighlightManager } from "../../highlighting";
-import { ElementMatcher } from "./element-matcher";
+import { applyHighlightToElement } from "../../highlighting";
+import { findBestMatch } from "./element-matcher";
 
 export const findAction = (
   targetText: string, 
-  items: CrawledItem[],
-    highlightManager: HighlightManager // 👈 HighlightManager를 인자로 받음
-
+  items: CrawledItem[]
 ): VoiceCommandResult => {
-  const matcher = new ElementMatcher();
-  const foundItem = matcher.findBestMatch(targetText, items);
+  const foundItem = findBestMatch(targetText, items);
   
- if (foundItem?.ownerId) {
+  if (foundItem?.ownerId) {
     const element = document.querySelector(`[data-crawler-id="${foundItem.ownerId}"]`) as HTMLElement;
     if (element) {
-      // 👇 HighlightManager를 사용하여 하이라이트 적용
-      highlightManager.apply(element);
+      applyHighlightToElement(element);
       return { type: "element_found", ownerId: foundItem.ownerId };
     }
   }

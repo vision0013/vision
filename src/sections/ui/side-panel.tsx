@@ -1,14 +1,14 @@
 /* domains/side-panel/sections/ui/SidePanel.tsx
 */
 import React from 'react';
-import './SidePanel.css';
+import './side-panel.css';
 import { useSidePanelController } from '../../features';
 import { TranscriptionDisplay } from '../../features';
 import { FilterControls } from '../../features';
 import { PermissionsError } from '../../features';
-import { Header } from './Header';
-import { Stats } from './Stats';
-import { ResultsList } from './ResultsList';
+import { Header } from './extension-header';
+import { Stats } from './crawling-summary';
+import { ResultsList } from './crawling-results';
 
 const SidePanel: React.FC = () => {
   const {

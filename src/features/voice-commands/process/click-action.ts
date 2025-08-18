@@ -1,13 +1,12 @@
 import { CrawledItem } from "../../../types";
 import { VoiceCommandResult } from "../types/voice-types";
-import { ElementMatcher } from "./element-matcher";
+import { findBestMatch } from "./element-matcher";
 
 export const clickAction = (
   targetText: string, 
   items: CrawledItem[]
 ): VoiceCommandResult => {
-  const matcher = new ElementMatcher();
-  const foundItem = matcher.findBestMatch(targetText, items);
+  const foundItem = findBestMatch(targetText, items);
   
   if (foundItem?.ownerId) {
     // 직접 DOM 요소 찾아서 클릭

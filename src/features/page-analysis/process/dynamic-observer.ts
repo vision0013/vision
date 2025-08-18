@@ -51,11 +51,17 @@ function handleMutations(state: ObserverState, mutations: MutationRecord[]): voi
   }, 800); // 800ms 디바운싱
 }
 
-export function createDynamicObserver(
+let globalObserverState: ObserverState | null = null;
+
+export function startDynamicObserver(
   crawler: ICrawler, 
   onNewItemsCallback: (newItems: CrawledItem[]) => void
-) {
-  const state: ObserverState = {
+): void {
+  if (globalObserverState) {
+    stopDynamicObserver();
+  }
+
+  globalObserverState = {
     observer: new MutationObserver((mutations) => {
       // 유의미한 변경인지 확인
       const hasMeaningfulMutations = mutations.some(m => 
@@ -63,8 +69,8 @@ export function createDynamicObserver(
         m.type === 'attributes'
       );
 
-      if (hasMeaningfulMutations) {
-        handleMutations(state, mutations);
+      if (hasMeaningfulMutations && globalObserverState) {
+        handleMutations(globalObserverState, mutations);
       }
     }),
     observerTimeout: null,
@@ -72,41 +78,22 @@ export function createDynamicObserver(
     onNewItemsFound: onNewItemsCallback
   };
 
-  return {
-    start: () => {
-      state.observer.observe(document.body, {
-        childList: true,    // 자식 요소 추가/삭제 감지
-        subtree: true,      // 모든 하위 요소 감지
-        attributes: true,   // 속성 변경 감지 활성화
-        attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] // 가시성 관련 속성만 감시
-      });
-      console.log('🔍 Dynamic element observer started with attribute monitoring.');
-    },
-
-    stop: () => {
-      state.observer.disconnect();
-      if (state.observerTimeout) {
-        clearTimeout(state.observerTimeout);
-        state.observerTimeout = null;
-      }
-      console.log('🛑 Dynamic element observer stopped');
-    }
-  };
+  globalObserverState.observer.observe(document.body, {
+    childList: true,    // 자식 요소 추가/삭제 감지
+    subtree: true,      // 모든 하위 요소 감지
+    attributes: true,   // 속성 변경 감지 활성화
+    attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] // 가시성 관련 속성만 감시
+  });
+  console.log('🔍 Dynamic element observer started with attribute monitoring.');
 }
 
-// 기존 클래스 API와 호환성을 위한 래퍼
-export class DynamicElementObserver {
-  private observer: ReturnType<typeof createDynamicObserver>;
-
-  constructor(crawler: ICrawler, onNewItemsCallback: (newItems: CrawledItem[]) => void) {
-    this.observer = createDynamicObserver(crawler, onNewItemsCallback);
-  }
-
-  start() {
-    this.observer.start();
-  }
-
-  stop() {
-    this.observer.stop();
+export function stopDynamicObserver(): void {
+  if (globalObserverState) {
+    globalObserverState.observer.disconnect();
+    if (globalObserverState.observerTimeout) {
+      clearTimeout(globalObserverState.observerTimeout);
+    }
+    globalObserverState = null;
+    console.log('🛑 Dynamic element observer stopped');
   }
 }
