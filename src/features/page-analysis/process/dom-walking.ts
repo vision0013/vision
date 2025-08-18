@@ -94,6 +94,63 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
           });
       }
 
+      if (tag === "input") {
+          const input = el as HTMLInputElement;
+          const type = input.type || "text";
+          const placeholder = normText(input.placeholder || "");
+          const label = normText(el.getAttribute("aria-label") || input.name || "");
+          
+          state.items.push({ 
+            id: state.nextItemId++, 
+            ownerId, 
+            parentId: parentElId, 
+            tag, 
+            role: meta.role, 
+            rect: meta.rect, 
+            type: "input", 
+            inputType: type,
+            placeholder,
+            label: label || placeholder || `[${type} input]`,
+            hidden: !isVisible
+          });
+      }
+
+      if (tag === "textarea") {
+          const textarea = el as HTMLTextAreaElement;
+          const placeholder = normText(textarea.placeholder || "");
+          const label = normText(el.getAttribute("aria-label") || textarea.name || "");
+          
+          state.items.push({ 
+            id: state.nextItemId++, 
+            ownerId, 
+            parentId: parentElId, 
+            tag, 
+            role: meta.role, 
+            rect: meta.rect, 
+            type: "textarea", 
+            placeholder,
+            label: label || placeholder || "[textarea]",
+            hidden: !isVisible
+          });
+      }
+
+      if (tag === "select") {
+          const select = el as HTMLSelectElement;
+          const label = normText(el.getAttribute("aria-label") || select.name || "");
+          
+          state.items.push({ 
+            id: state.nextItemId++, 
+            ownerId, 
+            parentId: parentElId, 
+            tag, 
+            role: meta.role, 
+            rect: meta.rect, 
+            type: "select", 
+            label: label || "[select]",
+            hidden: !isVisible
+          });
+      }
+
       if (tag !== 'a' && tag !== 'button' && !el.closest('a, button')) {
           let hasText = false;
           

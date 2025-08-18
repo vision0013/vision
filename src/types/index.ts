@@ -6,7 +6,7 @@ export interface BoundingBox {
   hidden?: boolean;
 }
 
-export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container';
+export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container' | 'input' | 'textarea' | 'select';
 
 export interface CrawledItem {
   id: number;
@@ -23,6 +23,9 @@ export interface CrawledItem {
   href?: string;
   label?: string;
   hidden?: boolean;
+  // 입력 요소 관련 필드
+  inputType?: string;
+  placeholder?: string;
 }
 
 export interface AnalysisResult {

@@ -100,6 +100,36 @@ import { functionName } from '../../features';
 - TypeScript 컴파일 오류 0건
 - **100% 함수형 프로그래밍 달성** 🚀
 
+## 음성 명령 처리 흐름
+
+### 전체 아키텍처
+```
+음성 인식 → Panel → Background → Content Script → Voice Controller → Action
+```
+
+### 상세 흐름
+1. **음성 인식 시작**: `panel-controller.ts:105`
+   - `useSpeechRecognition(handleVoiceCommand)` 호출
+
+2. **음성 인식 결과 처리**: `panel-controller.ts:98-102` 
+   - `handleVoiceCommand` 콜백에서 `executeVoiceCommand` 메시지를 background로 전송
+
+3. **Background 중계**: `background.ts:69-78`
+   - `executeVoiceCommand` 받아서 → `processVoiceCommand`로 변환하여 content script에 전송
+
+4. **Content Script 실행**: `content_script.tsx:207-217`
+   - `processVoiceCommand` 메시지 받아서 실제 명령 처리 함수 호출
+
+5. **명령 분기**: `voice-controller.ts:6-44`
+   - 키워드 분석 후 `clickAction` 또는 `findAction` 호출
+
+### 핵심 파일들
+- `speech-controller.ts` - 음성 인식 엔진 제어
+- `panel-controller.ts` - UI에서 음성 명령 시작점
+- `voice-controller.ts` - 음성 명령 분기 처리 (핵심)
+- `click-action.ts` - 클릭 액션 실행
+- `find-action.ts` - 검색 액션 실행
+
 ## 참고 문서
 - [FOLDER-STRUCTURE.md](./FOLDER-STRUCTURE.md) - 상세 폴더 구조 가이드
 - [REFACTORING.md](./REFACTORING.md) - 리팩터링 히스토리
