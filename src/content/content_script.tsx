@@ -1,6 +1,6 @@
 // content_script.tsx - 전체 코드 (상세 디버깅 버전)
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis';
-import { processVoiceCommand } from '../features/voice-commands';
+import { clickAction, findAction, scrollAction, inputAction, navigationAction } from '../features/voice-commands';
 import { applyHighlightToElement } from '../features/highlighting';
 
 
@@ -9,6 +9,37 @@ import { applyHighlightToElement } from '../features/highlighting';
 // =============================================
 let currentAnalysisResult: any = null;
 let dynamicObserverActive = false;
+
+// =============================================
+// 백그라운드에서 분석된 음성 명령 실행
+// =============================================
+function executeVoiceAction(request: any, items: any[]) {
+  const { detectedAction, targetText, originalCommand } = request;
+  
+  let result;
+  
+  switch (detectedAction) {
+    case 'click':
+      result = clickAction(targetText, items);
+      break;
+    case 'find':
+      result = findAction(targetText, items);
+      break;
+    case 'scroll':
+      result = scrollAction(targetText || originalCommand, items);
+      break;
+    case 'input':
+      result = inputAction(originalCommand, items);
+      break;
+    case 'navigation':
+      result = navigationAction(targetText || originalCommand, items);
+      break;
+    default:
+      result = findAction(targetText, items);
+  }
+  
+  console.log('🎯 [content] Action result:', result);
+}
 
 // =============================================
 // 안전한 메시지 전송 함수 (재시도 로직 포함)
@@ -83,50 +114,33 @@ const runCrawler = async () => {
   const analysisResult = pageCrawler.analyze();
   const crawlEndTime = performance.now();
   
-  console.log(`⚡ Full crawl completed in ${(crawlEndTime - crawlStartTime).toFixed(1)}ms`);
-  console.log(`📊 Found ${analysisResult.items.length} items total`);
+  console.log(`📊 Crawl completed: ${analysisResult.items.length} items in ${(crawlEndTime - crawlStartTime).toFixed(1)}ms`);
   
   currentAnalysisResult = analysisResult;
   
   // 백그라운드로 결과 전송
-  console.log('📤 Sending crawl results to background...');
   const success = await safeRuntimeMessage({ 
     action: 'crawlComplete', 
     data: analysisResult 
   });
   
   if (success) {
-    console.log('✅ Crawl results sent successfully');
-    
-    // 성공한 경우에만 동적 감지 시작
-    console.log('🚀 Starting dynamic element observer...');
     
     startDynamicObserver(pageCrawler, async (newItems: any) => {
-      console.log('🆕 DynamicObserver callback triggered');
-      console.log(`📈 Found ${newItems.length} new dynamic items:`, newItems);
+      // 동적 요소가 많이 감지되면 간단히 로깅
+      if (newItems.length > 10) {
+        console.log(`🆕 Found ${newItems.length} new dynamic items`);
+      } else if (newItems.length > 0) {
+        console.log('🆕 New items:', newItems.map((item: any) => `${item.type}:${item.text || item.label || '[no text]'}`));
+      }
       
-      // 새 아이템들의 상세 정보 로깅
-      newItems.forEach((item: any, index: any) => {
-        console.log(`  ${index + 1}. ${item.type}: "${item.text || item.label || item.alt}" (${item.tag})`);
-      });
-      
-      console.log('📤 Sending new items to background...');
-      const itemSuccess = await safeRuntimeMessage({ 
+      await safeRuntimeMessage({ 
         action: 'addNewItems', 
         data: newItems 
       });
-      
-      if (itemSuccess) {
-        console.log('✅ New items sent successfully');
-      } else {
-        console.log('❌ Failed to send new items');
-      }
     });
     
     dynamicObserverActive = true;
-    console.log('🔍 Dynamic element observer started for:', window.location.href);
-  } else {
-    console.log('❌ Failed to send crawl results, skipping observer setup');
   }
 };
 
@@ -203,16 +217,14 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
       }
     }
     
-   // 👇 음성 명령 처리 부분은 이제 voiceCommandProcessor가 알아서 하이라이트 처리
-    if (request.action === 'processVoiceCommand') {
-      console.log('🎤 Processing voice command:', request.command);
+   // 👇 백그라운드에서 분석된 음성 명령 실행
+    if (request.action === 'executeProcessedCommand') {
+      console.log('🎯 [content] Executing:', request.detectedAction, 'target:', request.targetText);
       
       if (currentAnalysisResult?.items) {
-        console.log(`📊 Processing command with ${currentAnalysisResult.items.length} items available`);
-        const result = processVoiceCommand(request.command, currentAnalysisResult.items);
-        console.log('🎯 Voice command result:', result);
+        executeVoiceAction(request, currentAnalysisResult.items);
       } else {
-        console.log('❌ No analysis result available for voice command');
+        console.log('❌ No analysis data available');
       }
     }
   } catch (error: any) {

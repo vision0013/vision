@@ -2,6 +2,67 @@
 // 각 탭의 마지막으로 확인된 URL을 저장하는 객체
 const tabLastUrls: { [key: number]: string } = {};
 
+// oktjs를 사용한 음성 명령 분석
+async function analyzeVoiceCommand(command: string, oktjsResult?: any) {
+  console.log('🎤 [background] Analyzing voice command:', command);
+  
+  let lowerCommand = command.toLowerCase().trim();
+  
+  // 패널에서 전달받은 oktjs 결과 출력
+  if (oktjsResult) {
+    console.log('✅ [background] Received oktjs analysis from panel');
+    console.log('🔍 [background] oktjs tokens:', oktjsResult.tokens?.map((t: any) => `${t.text}(${t.pos})`).join(' '));
+    if (oktjsResult.nouns?.length > 0) console.log('📗 [background] Nouns:', oktjsResult.nouns);
+    if (oktjsResult.verbs?.length > 0) console.log('🎯 [background] Verbs:', oktjsResult.verbs);
+    if (oktjsResult.adjectives?.length > 0) console.log('🔸 [background] Adjectives:', oktjsResult.adjectives);
+  } else {
+    console.log('ℹ️ [background] No oktjs result from panel');
+  }
+  
+  // 기존 키워드 기반 분석
+  let detectedAction = 'find';
+  let targetText = lowerCommand;
+  
+  const simplePatterns = [
+    { keywords: ['써줘', '써', '입력해줘', '입력', '타이핑'], action: 'input' },
+    { keywords: ['클릭해줘', '클릭', '눌러줘', '눌러'], action: 'click' },
+    { keywords: ['찾아줘', '찾아', '검색해줘', '검색'], action: 'find' },
+    { keywords: ['스크롤해줘', '스크롤', '내려줘', '올려줘'], action: 'scroll' }
+  ];
+  
+  for (const pattern of simplePatterns) {
+    for (const keyword of pattern.keywords) {
+      if (lowerCommand.includes(keyword)) {
+        detectedAction = pattern.action;
+        targetText = lowerCommand
+          .replace(keyword, '')
+          .replace(/해줘/g, '')
+          .replace(/주세요/g, '')
+          .replace(/\s줄(\s|$)/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        console.log(`✅ [background] Action: ${detectedAction}, target: "${targetText}"`);
+        break;
+      }
+    }
+    if (detectedAction !== 'find') break;
+  }
+  
+  // 추가 불용어 제거
+  targetText = targetText
+    .replace(/해줘|주세요|좀|을|를|에서|로|의|와|과|하고|그리고/g, '')
+    .replace(/\s줄(\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  return {
+    action: detectedAction,
+    targetText,
+    originalCommand: command
+  };
+}
+
 // 아이콘 클릭 시 사이드 패널을 열도록 설정
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
@@ -67,13 +128,25 @@ chrome.runtime.onMessage.addListener(async (request, sender, _sendResponse) => {
   }
   
   if (request.action === 'executeVoiceCommand' && request.tabId) {
+    console.log('🎤 [background] executeVoiceCommand received:', request.command);
     try {
+      // 백그라운드에서 음성 명령 분석
+      console.log('🔄 [background] Starting voice analysis...');
+      const analysisResult = await analyzeVoiceCommand(request.command, request.oktjsResult);
+      console.log('✅ [background] Voice analysis complete:', analysisResult);
+      
+      // 분석 결과를 Content Script로 전송
+      console.log('📤 [background] Sending to content script...');
       await chrome.tabs.sendMessage(request.tabId, { 
-        action: 'processVoiceCommand', 
-        command: request.command 
+        action: 'executeProcessedCommand', 
+        detectedAction: analysisResult.action,
+        targetText: analysisResult.targetText,
+        originalCommand: request.preprocessedCommand || analysisResult.originalCommand // 전처리된 명령어 사용
       });
+      console.log('✅ [background] Message sent to content script');
     } catch (error) {
-      console.log(`[background] Cannot execute voice command in tab ${request.tabId}:`, (error as Error).message);
+      console.log(`❌ [background] Voice command error in tab ${request.tabId}:`, (error as Error).message);
+      console.log(`❌ [background] Error stack:`, (error as Error).stack);
     }
   }
 });

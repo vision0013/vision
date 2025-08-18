@@ -19,6 +19,11 @@ export function createSpeechEngine() {
     recognitionInstance.interimResults = true;
     recognitionInstance.lang = 'ko-KR';
     
+    // 더 긴 무음 대기 시간 설정 (가능한 경우)
+    if ('maxAlternatives' in recognitionInstance) {
+      recognitionInstance.maxAlternatives = 1;
+    }
+    
     return recognitionInstance;
   };
 

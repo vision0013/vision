@@ -178,7 +178,12 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
               const className = el.className || '';
               const id = el.id || '';
               
-              if (className || id) {
+              // 의미있는 컨테이너만 포함 (aria-label이 있거나, 특정 역할을 하는 경우)
+              const ariaLabel = el.getAttribute('aria-label') || '';
+              const role = el.getAttribute('role') || '';
+              const hasInteractiveChildren = el.querySelector('button, input, textarea, select, a[href]');
+              
+              if ((ariaLabel || role || hasInteractiveChildren) && (className || id)) {
                   state.items.push({ 
                     id: state.nextItemId++, 
                     ownerId, 
@@ -187,7 +192,7 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
                     role: meta.role, 
                     rect: meta.rect, 
                     type: "container", 
-                    text: `[${tag}${id ? '#' + id : ''}${className ? '.' + className.split(' ')[0] : ''}]`,
+                    text: ariaLabel || `[${tag}${id ? '#' + id : ''}${className ? '.' + className.split(' ')[0] : ''}]`,
                     hidden: !isVisible
                   });
               }
