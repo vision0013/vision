@@ -15,7 +15,16 @@ export const findAction = (
   if (foundItem?.ownerId) {
     const element = document.querySelector(`[data-crawler-id="${foundItem.ownerId}"]`) as HTMLElement;
     if (element) {
-      applyHighlightToElement(element);
+      // ✨ [수정] 직접 하이라이팅 대신 중앙 상태 관리 사용
+      chrome.runtime.sendMessage({
+        action: 'setActiveElement',
+        ownerId: foundItem.ownerId
+      }).catch(() => {
+        console.log('[find-action] Background context may be invalidated');
+        // 백그라운드 통신 실패 시 로컬 하이라이팅으로 폴백
+        applyHighlightToElement(element);
+      });
+      
       return { type: "element_found", ownerId: foundItem.ownerId };
     }
   }

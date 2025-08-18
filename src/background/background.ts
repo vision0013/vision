@@ -2,6 +2,58 @@
 // 각 탭의 마지막으로 확인된 URL을 저장하는 객체
 const tabLastUrls: { [key: number]: string } = {};
 
+// ✨ [신규] 중앙 상태 관리: 탭별 활성화된 요소 상태
+interface ActiveElementState {
+  ownerId: number | null;
+  timestamp: number;
+}
+
+const tabActiveElements: { [tabId: number]: ActiveElementState } = {};
+
+// ✨ [신규] 활성화된 요소 상태 관리 함수들
+function setActiveElement(tabId: number, ownerId: number | null): void {
+  tabActiveElements[tabId] = {
+    ownerId,
+    timestamp: Date.now()
+  };
+  
+  console.log(`🎯 [background] Active element set for tab ${tabId}:`, ownerId);
+  
+  // Content Script와 Panel에 상태 변경 알림
+  notifyActiveElementChange(tabId, ownerId);
+}
+
+function getActiveElement(tabId: number): number | null {
+  return tabActiveElements[tabId]?.ownerId || null;
+}
+
+function clearActiveElement(tabId: number): void {
+  setActiveElement(tabId, null);
+}
+
+async function notifyActiveElementChange(tabId: number, ownerId: number | null): Promise<void> {
+  // Content Script에 알림
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'activeElementChanged',
+      ownerId
+    });
+  } catch (error) {
+    console.log(`[background] Cannot notify content script in tab ${tabId}:`, (error as Error).message);
+  }
+  
+  // Panel에 알림 (모든 패널 인스턴스에 브로드캐스트)
+  try {
+    chrome.runtime.sendMessage({
+      action: 'activeElementChanged',
+      tabId,
+      ownerId
+    });
+  } catch (error) {
+    console.log(`[background] Cannot notify panel:`, (error as Error).message);
+  }
+}
+
 // ✨ [수정] oktjs 토큰에서 타겟 텍스트와 방향을 함께 추출하는 함수
 function extractTargetAndDirection(tokens: any[]): { targetText: string, direction: 'up' | 'down' | null } {
   const directionWords = {
@@ -165,14 +217,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, _sendResponse) => {
   }
   
   if (request.action === 'highlightElement' && request.tabId) {
-    try {
-      await chrome.tabs.sendMessage(request.tabId, { 
-        action: 'highlightElement', 
-        ownerId: request.ownerId 
-      });
-    } catch (error) {
-      console.log(`[background] Cannot highlight element in tab ${request.tabId}:`, (error as Error).message);
-    }
+    // ✨ [수정] 중앙 상태 관리와 연동하여 활성 요소 설정
+    setActiveElement(request.tabId, request.ownerId);
+  }
+  
+  if (request.action === 'setActiveElement' && sender.tab?.id) {
+    // ✨ [신규] Content Script에서 활성 요소 설정 요청 처리
+    setActiveElement(sender.tab.id, request.ownerId);
   }
   
   if (request.action === 'executeVoiceCommand' && request.tabId) {
@@ -199,5 +250,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, _sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabLastUrls[tabId];
-  console.log(`[background] Cleaned up URL for closed tab ${tabId}.`);
+  // ✨ [신규] 탭 닫힐 때 활성 요소 상태도 정리
+  delete tabActiveElements[tabId];
+  console.log(`[background] Cleaned up URL and active element state for closed tab ${tabId}.`);
 });

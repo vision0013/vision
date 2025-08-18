@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useSidePanelStore } from '../process/panel-store';
 import { useSpeechRecognition, requestHighlight } from '../../index'; // features 내부 참조
 
@@ -13,6 +13,9 @@ export const useSidePanelController = () => {
     setFilter,
     setSearchTerm,
   } = useSidePanelStore();
+
+  // ✨ [신규] 현재 활성화된 요소 상태 관리
+  const [activeElementId, setActiveElementId] = useState<number | null>(null);
 
   // 현재 탭의 데이터를 직접 구독하여 탭 변경시 자동 업데이트
   const currentTabData = activeTabId && tabDataMap[activeTabId] 
@@ -67,6 +70,15 @@ export const useSidePanelController = () => {
         // 현재 활성 탭 ID 전달
         addAnalysisItems(request.data, activeTabIdRef.current || undefined);
       }
+      
+      // ✨ [신규] 중앙 상태 관리에서 활성 요소 변경 알림 수신
+      else if (request.action === 'activeElementChanged') {
+        console.log('🎯 [panel] Active element changed:', request.ownerId, 'for tab:', request.tabId);
+        // 현재 활성 탭의 상태 변경만 처리
+        if (request.tabId === activeTabIdRef.current) {
+          setActiveElementId(request.ownerId);
+        }
+      }
     };
     
     chrome.runtime.onMessage.addListener(messageListener);
@@ -117,14 +129,14 @@ export const useSidePanelController = () => {
     let oktjsResult = null;
     try {
       console.log('🔄 [panel] Loading oktjs...');
-      const okt = await import('oktjs');
+      const oktjs = await import('oktjs');
       console.log('✅ [panel] oktjs loaded successfully');
       
-      okt.init();
+      oktjs.init();
       console.log('✅ [panel] oktjs initialized');
       
-      const normalized = okt.normalize(preprocessed);
-      const tokens = okt.tokenize(normalized);
+      const normalized = oktjs.normalize(preprocessed);
+      const tokens = oktjs.tokenize(normalized);
       
       console.log('🔍 [panel] oktjs tokens:', tokens.map(t => `${t.text}(${t.pos})`).join(' '));
       
@@ -177,5 +189,7 @@ export const useSidePanelController = () => {
     onToggleListening: toggleListening,
     onExportData: exportData,
     recognitionError: error,
+    // ✨ [신규] 현재 활성화된 요소 ID
+    activeElementId,
   };
 };

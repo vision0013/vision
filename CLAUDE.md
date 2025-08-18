@@ -1,5 +1,106 @@
 # Claude Code 프로젝트 정보
 
+## 📋 동적 임포트 사용 가이드 (Dynamic Import Guidelines)
+
+**Chrome Extension MV3 + Vite 환경에서 동적 임포트(`import()`) 사용 가능하나 특별 설정 필요**
+
+### ✅ 사용 가능 조건
+- Manifest V3 + `"type": "module"` 환경
+- Vite 번들러 + ES Module 기반
+- 확장 내부 파일만 허용 (`chrome-extension://<id>/...`)
+
+### ⚠️ Vite 환경 특별 제약사항
+1. **코드 스플리팅**: Vite가 동적 임포트를 자동으로 chunk 분리 (`assets/xxx-hash.js`)
+2. **CSP 제약**: 외부 CDN URL 완전 차단
+3. **web_accessible_resources**: chunk 파일 접근 권한 필수 설정
+4. **Service Worker 제약**: DOM 의존성 라이브러리는 Panel/Content Script에서만 사용
+
+### Vite 환경 필수 설정 (Chrome Extension MV3)
+
+#### 1. manifest.json - web_accessible_resources 설정
+```json
+{
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
+```
+
+#### 2. vite.config.ts - ESM 출력 보장
+```typescript
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',           // Side Panel UI
+        background: 'background.ts',   // Service Worker
+        content_script: 'content_script.tsx' // Content Script
+      },
+      output: {
+        format: "es", // ✅ ESM 출력 필수
+        entryFileNames: `[name].js`,
+        chunkFileNames: `assets/[name].js`,
+      }
+    }
+  }
+});
+```
+
+#### 3. 동적 임포트 권장 패턴
+```typescript
+// ✅ 외부 라이브러리 (npm 패키지)
+const oktjs = await import('oktjs');
+
+// ✅ 내부 모듈 - new URL 패턴 필수
+const utils = await import(new URL('./utils.ts', import.meta.url));
+
+// ✅ Background에서 이벤트 기반 로딩
+chrome.runtime.onMessage.addListener(async (msg) => {
+  if (msg.type === "nlpAnalysis") {
+    const { analyze } = await import(new URL("./nlpProcessor.ts", import.meta.url));
+    return analyze(msg.text);
+  }
+});
+```
+
+### 현재 프로젝트 빌드 구조 (Vite 통합)
+```typescript
+// vite.config.ts - 모든 컴포넌트 통합 빌드
+input: {
+  main: 'index.html',           // Side Panel UI
+  background: 'background.ts',   // Service Worker
+  content_script: 'content_script.tsx' // Content Script
+}
+```
+
+### 현재 프로젝트 적용사항
+- ✅ **통합 빌드**: Side Panel + Background + Content Script 모두 Vite로 빌드
+- ✅ **Panel**: oktjs 동적 임포트 활용 (음성 명령 처리시에만 로드)
+- ✅ **성능 최적화**: 3.3MB oktjs를 필요시에만 로드
+- ✅ **번들 분리**: Content Script(17KB) + Main(155KB) + oktjs chunk 분리
+- ✅ **ES Module**: `"type": "module"` 환경에서 모든 동적 임포트 지원
+
+### 사용 권장 케이스 및 주의사항
+
+#### ✅ 동적 임포트 적합한 경우
+- **무거운 라이브러리**: oktjs(3.3MB), Chart.js, PDF.js, Monaco Editor
+- **조건부 기능**: 특정 이벤트나 사용자 액션시에만 필요한 모듈
+- **Background 이벤트 핸들링**: 메시지 타입별 선택적 로딩
+
+#### ⚠️ 주의사항
+- **내부 모듈**: 반드시 `new URL(..., import.meta.url)` 패턴 사용
+- **manifest 설정**: `web_accessible_resources`에 assets 폴더 등록 필수
+- **ESM 출력**: vite.config.ts에서 `format: "es"` 설정 확인
+- **Service Worker**: MV3 background는 `"type": "module"` 필수
+
+#### 🚫 비권장 케이스
+- 자주 사용하는 유틸리티 함수 (정적 임포트 권장)
+- 초기화시 반드시 필요한 핵심 모듈
+- 외부 CDN URL (CSP로 차단됨)
+
 ## 프로젝트 개요
 Chrome Extension Crawler - 웹 페이지 분석 및 음성 제어 확장 프로그램
 

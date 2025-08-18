@@ -16,6 +16,15 @@ export const clickAction = (
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       element.click();
+      
+      // ✨ [신규] 중앙 상태 관리에 활성 요소 알림
+      chrome.runtime.sendMessage({
+        action: 'setActiveElement',
+        ownerId: foundItem.ownerId
+      }).catch(() => {
+        console.log('[click-action] Background context may be invalidated');
+      });
+      
       return { type: "element_found", ownerId: foundItem.ownerId };
     }
   }

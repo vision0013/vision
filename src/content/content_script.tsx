@@ -1,7 +1,7 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis';
 import { processVoiceCommand } from '../features/voice-commands'; // ✨ [개선] processVoiceCommand만 import
-import { applyHighlightToElement } from '../features/highlighting';
+import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
 import { AnalysisResult, CrawledItem } from '../types';
 
 let currentAnalysisResult: AnalysisResult | null = null;
@@ -99,10 +99,16 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
       runCrawler();
     }
     
-    if (request.action === 'highlightElement') {
-      const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
-      if (element) {
-        applyHighlightToElement(element);
+    if (request.action === 'activeElementChanged') {
+      // ✨ [수정] 중앙 상태 기반 하이라이팅 처리
+      if (request.ownerId) {
+        const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
+        if (element) {
+          applyHighlightToElement(element);
+        }
+      } else {
+        // ownerId가 null이면 모든 하이라이팅 제거
+        removeHighlightFromElement();
       }
     }
     

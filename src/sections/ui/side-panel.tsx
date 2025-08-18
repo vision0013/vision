@@ -24,6 +24,8 @@ const SidePanel: React.FC = () => {
     transcribedText,
     onToggleListening,
     onExportData,
+    // ✨ [신규] 현재 활성화된 요소 ID
+    activeElementId,
   } = useSidePanelController();
 
   if (!analysisResult) {
@@ -59,6 +61,7 @@ const SidePanel: React.FC = () => {
       <ResultsList
         items={filteredItems}
         onItemClick={onItemClick}
+        activeElementId={activeElementId}
       />
     </div>
   );
