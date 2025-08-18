@@ -2,23 +2,17 @@ import { CrawledItem } from "../../../types";
 import { VoiceCommandResult } from "../types/voice-types";
 import { findBestMatch } from "./element-matcher";
 
+// ✨ [수정] direction 파라미터를 받도록 함수 시그니처 변경
 export const scrollAction = (
   targetText: string, 
-  items: CrawledItem[]
+  items: CrawledItem[],
+  direction: 'up' | 'down' | null 
 ): VoiceCommandResult => {
-  const lowerText = targetText.toLowerCase();
-  let direction = 'down';
-  
-  if (lowerText.includes('위') || lowerText.includes('올려') || lowerText.includes('업')) {
-    direction = 'up';
-  } else if (lowerText.includes('아래') || lowerText.includes('내려') || lowerText.includes('다운')) {
-    direction = 'down';
-  }
-  
-  // 특정 요소로 스크롤하는 경우
-  if (targetText && !['위', '아래', '올려', '내려', '위로', '아래로'].some(keyword => lowerText.includes(keyword))) {
-    // ✨ [수정] findBestMatch 호출 시 direction 인수로 null 전달
-    const foundItem = findBestMatch(targetText, items, null);
+
+  // Case 1: 스크롤할 특정 대상이 명시된 경우 ("더보기로 스크롤")
+  if (targetText) {
+    // findBestMatch는 이제 direction을 받아 "위쪽 더보기" 같은 명령도 처리 가능
+    const foundItem = findBestMatch(targetText, items, direction);
     
     if (foundItem?.ownerId) {
       const element = document.querySelector(`[data-crawler-id="${foundItem.ownerId}"]`) as HTMLElement;
@@ -29,15 +23,16 @@ export const scrollAction = (
     }
   }
   
-  // 일반 페이지 스크롤
+  // Case 2: 특정 대상 없이 일반적인 페이지 스크롤을 하는 경우 ("아래로 스크롤")
+  const scrollDirection = direction || 'down'; // direction이 없으면 기본값 'down'
   const scrollDistance = 300;
   const currentY = window.scrollY;
-  const targetY = direction === 'up' ? currentY - scrollDistance : currentY + scrollDistance;
+  const targetY = scrollDirection === 'up' ? currentY - scrollDistance : currentY + scrollDistance;
   
   window.scrollTo({
     top: Math.max(0, targetY),
     behavior: 'smooth'
   });
   
-  return { type: "scroll_executed", direction };
+  return { type: "scroll_executed", direction: scrollDirection };
 };

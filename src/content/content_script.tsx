@@ -1,40 +1,24 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis';
-import { clickAction, findAction, scrollAction, inputAction, navigationAction } from '../features/voice-commands';
+import { processVoiceCommand } from '../features/voice-commands'; // ✨ [개선] processVoiceCommand만 import
 import { applyHighlightToElement } from '../features/highlighting';
 import { AnalysisResult, CrawledItem } from '../types';
 
 let currentAnalysisResult: AnalysisResult | null = null;
 let dynamicObserverActive = false;
 
-// ✨ [수정] executeVoiceAction 함수 시그니처 변경 (direction 추가)
+// ✨ [개선] executeVoiceAction 함수를 processVoiceCommand 호출로 대체
 function executeVoiceAction(request: any, items: CrawledItem[]) {
   const { detectedAction, targetText, originalCommand, direction } = request;
   
-  let result;
-  
-  switch (detectedAction) {
-    case 'click':
-      // ✨ [수정] direction 전달
-      result = clickAction(targetText, items, direction);
-      break;
-    case 'find':
-      // ✨ [수정] direction 전달
-      result = findAction(targetText, items, direction);
-      break;
-    case 'scroll':
-      result = scrollAction(targetText || originalCommand, items);
-      break;
-    case 'input':
-      result = inputAction(originalCommand, items);
-      break;
-    case 'navigation':
-      result = navigationAction(targetText || originalCommand, items);
-      break;
-    default:
-      // ✨ [수정] direction 전달
-      result = findAction(targetText, items, direction);
-  }
+  // ✨ [개선] payload 객체로 묶어서 전달
+  const result = processVoiceCommand({
+    detectedAction,
+    targetText,
+    direction,
+    originalCommand,
+    items
+  });
   
   console.log('🎯 [content] Action result:', result);
 }

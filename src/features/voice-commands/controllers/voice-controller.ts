@@ -6,87 +6,48 @@ import { scrollAction } from "../process/scroll-action";
 import { inputAction } from "../process/input-action";
 import { navigationAction } from "../process/navigation-action";
 
-export function processVoiceCommand(command: string, items: CrawledItem[]): VoiceCommandResult {
-  let lowerCommand = command.toLowerCase().trim();
-  
-  let processedCommand = lowerCommand;
-  
-  // 향상된 키워드 기반 의도 분석
-  let detectedAction = 'find'; // 기본값
-  let targetText = processedCommand;
-  
-  // ✨ [수정] 방향성 키워드 분석 로직 추가
-  let direction: 'up' | 'down' | null = null;
-  const directionWords = {
-    up: ['위', '위쪽', '상단'],
-    down: ['아래', '아래쪽', '하단']
-  };
+// ✨ [개선] 함수에 전달될 파라미터를 위한 인터페이스 정의
+interface CommandPayload {
+  detectedAction: string;
+  targetText: string;
+  direction: 'up' | 'down' | null;
+  originalCommand: string;
+  items: CrawledItem[];
+}
 
-  for (const key in directionWords) {
-    for (const word of directionWords[key as keyof typeof directionWords]) {
-      if (processedCommand.includes(word)) {
-        direction = key as 'up' | 'down';
-        processedCommand = processedCommand.replace(word, '').trim(); // 타겟 텍스트에서 방향 키워드 제거
-        break;
-      }
-    }
-    if (direction) break;
+/**
+ * background.ts에서 미리 분석된 명령어 정보를 받아,
+ * 적절한 액션 함수를 호출하는 라우터 역할을 합니다.
+ * @param payload 명령어 분석 결과가 담긴 객체
+ * @returns VoiceCommandResult 액션 실행 결과
+ */
+export function processVoiceCommand(payload: CommandPayload): VoiceCommandResult {
+  // ✨ [개선] 객체에서 필요한 정보를 바로 구조 분해 할당하여 사용
+  const { detectedAction, targetText, direction, originalCommand, items } = payload;
+
+  console.log(`✅ [CONTROLLER] Executing: ${detectedAction}, Target: "${targetText}", Direction: ${direction}`);
+
+  if (!targetText && ['click', 'find'].includes(detectedAction)) {
+    return { type: "not_found", message: "대상을 찾을 수 없습니다." };
   }
-  
-  const simplePatterns = [
-    { keywords: ['써줘', '써', '입력해줘', '입력', '타이핑'], action: 'input' },
-    { keywords: ['클릭해줘', '클릭', '눌러줘', '눌러'], action: 'click' },
-    { keywords: ['찾아줘', '찾아', '검색해줘', '검색'], action: 'find' },
-    { keywords: ['스크롤해줘', '스크롤', '내려줘', '올려줘'], action: 'scroll' }
-  ];
-  
-  for (const pattern of simplePatterns) {
-    for (const keyword of pattern.keywords) {
-      if (processedCommand.includes(keyword)) {
-        detectedAction = pattern.action;
-        targetText = processedCommand
-          .replace(keyword, '')
-          .replace(/해줘/g, '')
-          .replace(/주세요/g, '')
-          .replace(/\s줄(\s|$)/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        console.log(`✅ Action: ${detectedAction}, target: "${targetText}", direction: ${direction}`);
-        break;
-      }
-    }
-    if (detectedAction !== 'find') break;
-  }
-  
-  targetText = targetText
-    .replace(/해줘|주세요|좀|을|를|에서|로|의|와|과|하고|그리고/g, '')
-    .replace(/\s줄(\s|$)/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-    
-  if (!targetText && ['input', 'navigation', 'scroll'].includes(detectedAction)) {
-    // targetText가 없어도 실행 가능한 액션들
-  } else if (!targetText) {
-    return { type: "not_found" };
-  }
-  
-  // 액션 실행
+
   switch (detectedAction) {
     case 'click':
-      // ✨ [수정] direction 파라미터 전달
       return clickAction(targetText, items, direction);
+    
     case 'find':
-      // ✨ [수정] direction 파라미터 전달
       return findAction(targetText, items, direction);
+    
     case 'scroll':
-      return scrollAction(targetText || lowerCommand, items);
+      return scrollAction(targetText, items, direction);
+    
     case 'input':
-      return inputAction(command, items);
+      return inputAction(originalCommand, items);
+    
     case 'navigation':
-      return navigationAction(targetText || lowerCommand, items);
+      return navigationAction(targetText || originalCommand, items);
+    
     default:
-      // ✨ [수정] direction 파라미터 전달
       return findAction(targetText, items, direction);
   }
 }
