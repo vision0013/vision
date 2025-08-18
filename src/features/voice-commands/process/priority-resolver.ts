@@ -23,104 +23,90 @@ function getRoleScore(config: PriorityConfig, item: CrawledItem): number {
 
 function getKeywordScore(config: PriorityConfig, item: CrawledItem, targetText: string): number {
   const lowerTarget = targetText.toLowerCase();
-  
-  // 키워드별 특별 가중치 확인
   for (const [keyword, keywordConfig] of Object.entries(config.keywords)) {
     if (lowerTarget.includes(keyword.toLowerCase())) {
       let bonus = keywordConfig.weight;
-      
-      // 선호하는 타입이면 추가 보너스
-      if (keywordConfig.preferredType && item.type === keywordConfig.preferredType) {
-        bonus += 50;
-      }
-      
-      // 선호하는 역할이면 추가 보너스
-      if (keywordConfig.preferredRole && item.role === keywordConfig.preferredRole) {
-        bonus += 50;
-      }
-      
+      if (keywordConfig.preferredType && item.type === keywordConfig.preferredType) bonus += 50;
+      if (keywordConfig.preferredRole && item.role === keywordConfig.preferredRole) bonus += 50;
       return bonus;
     }
   }
-  
   return 0;
 }
 
-function getPositionScore(config: PriorityConfig, item: CrawledItem): number {
+// ✨ [수정] direction 파라미터를 받아서 위치 점수를 동적으로 계산
+function getPositionScore(item: CrawledItem, direction: 'up' | 'down' | null): number {
   const rect = item.rect;
-  const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
   
-  // ✨ viewport 내에 있는지 먼저 체크
   const bottom = rect.top + rect.height;
   const right = rect.left + rect.width;
   
   const isInViewport = (
-    rect.top < viewportHeight &&
-    bottom > 0 &&
-    rect.left < viewportWidth &&
-    right > 0
+    rect.top < viewportHeight && bottom > 0 &&
+    rect.left < viewportWidth && right > 0
   );
   
-  // viewport 밖에 있으면 큰 페널티
+  // 1. 뷰포트 밖에 있으면 0점 (후보 탈락)
   if (!isInViewport) {
-    return -100; // 큰 마이너스 점수
+    return 0;
   }
   
-  // viewport 내에 있으면 기본 보너스
-  let score = 100; // viewport 내 기본 보너스
-  
-  // 화면 상단 20% 영역 추가 보너스
-  if (rect.top < viewportHeight * 0.2) {
-    score += config.position.topAreaBonus;
+  // 2. direction 값에 따라 점수 계산 방식 변경
+  if (direction === 'down') {
+    // "아래쪽" 명령: Y좌표가 클수록 (화면 아래에 있을수록) 높은 점수
+    return rect.top;
   }
   
-  // 화면 중앙 50% 영역 추가 보너스 (20% ~ 70%)
-  else if (rect.top < viewportHeight * 0.7) {
-    score += config.position.centerAreaBonus;
-  }
-  
-  return score;
+  // "위쪽" 명령 또는 방향 지정 없을 때 (기본값): Y좌표가 작을수록 (화면 위에 있을수록) 높은 점수
+  return viewportHeight - Math.max(0, rect.top);
 }
 
-export function calculateScore(item: CrawledItem, targetText: string, config: PriorityConfig = ELEMENT_PRIORITIES): ScoredItem {
+// ✨ [수정] direction 파라미터 추가
+export function calculateScore(
+  item: CrawledItem, 
+  targetText: string, 
+  direction: 'up' | 'down' | null,
+  config: PriorityConfig = ELEMENT_PRIORITIES
+): ScoredItem {
   const typeScore = getTypeScore(config, item);
   const roleScore = getRoleScore(config, item);
   const keywordScore = getKeywordScore(config, item, targetText);
-  const positionScore = getPositionScore(config, item);
+  // ✨ [수정] getPositionScore에 direction 전달
+  const positionScore = getPositionScore(item, direction);
 
-  const total = typeScore + roleScore + keywordScore + positionScore;
+  // 위치 점수에 압도적인 가중치(x1000)를 부여하여 다른 모든 점수보다 우선되게 함
+  const total = (positionScore * 1000) + typeScore + roleScore + keywordScore;
 
   return {
     item,
     score: total,
-    breakdown: {
-      typeScore,
-      roleScore,
-      keywordScore,
-      positionScore,
-      total
-    }
+    breakdown: { typeScore, roleScore, keywordScore, positionScore, total }
   };
 }
 
-export function selectBestMatch(candidates: CrawledItem[], targetText: string, config: PriorityConfig = ELEMENT_PRIORITIES): CrawledItem | null {
+// ✨ [수정] direction 파라미터 추가
+export function selectBestMatch(
+  candidates: CrawledItem[], 
+  targetText: string, 
+  direction: 'up' | 'down' | null,
+  config: PriorityConfig = ELEMENT_PRIORITIES
+): CrawledItem | null {
   if (candidates.length === 0) return null;
   
+  // ✨ [수정] calculateScore에 direction 전달
   const scoredItems = candidates.map(item => 
-    calculateScore(item, targetText, config)
+    calculateScore(item, targetText, direction, config)
   );
   
-  // 점수 기준으로 정렬 (높은 점수가 먼저)
   scoredItems.sort((a, b) => b.score - a.score);
   
-  // 디버깅용 로그
   if (scoredItems.length > 1) {
-    console.log(`🎯 Found ${scoredItems.length} candidates for "${targetText}":`, 
+    console.log(`🎯 Found ${scoredItems.length} candidates for "${targetText}" (direction: ${direction || 'default'}):`, 
       scoredItems.map(item => ({
         text: item.item.text || item.item.label || item.item.alt,
         type: item.item.type,
-        role: item.item.role,
         score: item.score,
         breakdown: item.breakdown
       }))

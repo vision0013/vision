@@ -4,7 +4,21 @@ import { CrawlerState } from '../types/crawler-state';
 import { normText } from './text-processing';
 import { isCurrentlyVisible, roleOf, bbox } from './element-analysis';
 
-export function walkElement(el: Element, state: CrawlerState, parentElId: number | null = null): void {
+/**
+ * DOM 요소를 재귀적으로 탐색하여 크롤링 아이템을 생성합니다.
+ * @param el 탐색을 시작할 요소
+ * @param state 크롤러의 현재 상태
+ * @param parentElId 부모 요소의 ID
+ * @param isDescendantOfLink 현재 요소가 'a' 태그의 자손인지 여부
+ * @param isDescendantOfButton ✨ [수정] 현재 요소가 버튼의 자손인지 여부
+ */
+export function walkElement(
+  el: Element, 
+  state: CrawlerState, 
+  parentElId: number | null = null, 
+  isDescendantOfLink: boolean = false,
+  isDescendantOfButton: boolean = false // ✨ [수정] 파라미터 추가
+): void {
   if (!(el instanceof HTMLElement)) return;
 
   if (state.elIdMap.has(el)) {
@@ -34,7 +48,10 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
   state.elMeta.set(ownerId, meta);
 
   const isTarget = TARGET_TAGS.has(tag);
-  
+  const isLink = tag === 'a';
+  // ✨ [수정] <button> 태그와 role="button"을 모두 버튼으로 인식
+  const isButton = tag === 'button' || meta.role === 'button';
+
   if (isTarget) {
       const isVisible = isCurrentlyVisible(el);
       
@@ -58,7 +75,7 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
           });
       }
 
-      if (tag === "a") {
+      if (isLink) {
           const href = el.getAttribute("href") || "";
           const text = normText(el.textContent);
           
@@ -78,7 +95,8 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
           }
       }
 
-      if (tag === "button") {
+      // ✨ [수정] 버튼 처리 로직 통합
+      if (isButton) {
           const label = normText(el.getAttribute("aria-label") || el.textContent || "");
           
           state.items.push({ 
@@ -151,7 +169,8 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
           });
       }
 
-      if (tag !== 'a' && tag !== 'button' && !el.closest('a, button')) {
+      // ✨ [수정] 링크나 버튼(역할 포함)의 자손이 아닐 경우에만 텍스트 노드로 분리
+      if (!isLink && !isDescendantOfLink && !isButton && !isDescendantOfButton) {
           let hasText = false;
           
           for (const node of el.childNodes) {
@@ -178,7 +197,6 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
               const className = el.className || '';
               const id = el.id || '';
               
-              // 의미있는 컨테이너만 포함 (aria-label이 있거나, 특정 역할을 하는 경우)
               const ariaLabel = el.getAttribute('aria-label') || '';
               const role = el.getAttribute('role') || '';
               const hasInteractiveChildren = el.querySelector('button, input, textarea, select, a[href]');
@@ -200,9 +218,10 @@ export function walkElement(el: Element, state: CrawlerState, parentElId: number
       }
   }
 
+  // ✨ [수정] 재귀 호출 시, 현재 요소가 버튼이거나 부모가 버튼의 자손이었는지 여부를 전달
   for (const child of el.children) {
     if (state.visited > MAX_NODES) break;
-    walkElement(child, state, ownerId);
+    walkElement(child, state, ownerId, isLink || isDescendantOfLink, isButton || isDescendantOfButton);
   }
 }
 

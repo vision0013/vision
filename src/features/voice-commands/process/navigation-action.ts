@@ -10,7 +10,6 @@ export const navigationAction = (
   
   // 네비게이션 명령 분석
   if (lowerText.includes('뒤로') || lowerText.includes('돌아가')) {
-    // 브라우저 뒤로 가기
     if (window.history.length > 1) {
       window.history.back();
       return { type: "navigation_executed", action: "back" };
@@ -19,19 +18,16 @@ export const navigationAction = (
   }
   
   if (lowerText.includes('앞으로') || lowerText.includes('다음')) {
-    // 브라우저 앞으로 가기
     window.history.forward();
     return { type: "navigation_executed", action: "forward" };
   }
   
   if (lowerText.includes('새로고침') || lowerText.includes('리프레시') || lowerText.includes('갱신')) {
-    // 페이지 새로고침
     window.location.reload();
     return { type: "navigation_executed", action: "refresh" };
   }
   
   if (lowerText.includes('닫기') || lowerText.includes('끄기') || lowerText.includes('종료')) {
-    // 창 닫기 시도 (팝업 창인 경우만 가능)
     try {
       window.close();
       return { type: "navigation_executed", action: "close" };
@@ -41,13 +37,11 @@ export const navigationAction = (
   }
   
   if (lowerText.includes('홈') || lowerText.includes('메인')) {
-    // 홈페이지로 이동 (루트 경로로)
     const homeUrl = window.location.origin;
     window.location.href = homeUrl;
     return { type: "navigation_executed", action: "home" };
   }
   
-  // URL 패턴 검사 (http:// 또는 https://)
   const urlPattern = /https?:\/\/[^\s]+/;
   const urlMatch = targetText.match(urlPattern);
   if (urlMatch) {
@@ -57,12 +51,12 @@ export const navigationAction = (
   
   // 링크 요소 찾아서 클릭
   if (targetText && !['뒤로', '앞으로', '새로고침', '닫기', '홈'].some(keyword => lowerText.includes(keyword))) {
-    const foundItem = findBestMatch(targetText, items);
+    // ✨ [수정] findBestMatch 호출 시 direction 인수로 null 전달
+    const foundItem = findBestMatch(targetText, items, null);
     
     if (foundItem?.ownerId) {
       const element = document.querySelector(`[data-crawler-id="${foundItem.ownerId}"]`) as HTMLElement;
       if (element) {
-        // 링크인지 확인
         if (element.tagName === 'A' || element.closest('a')) {
           const linkElement = element.tagName === 'A' ? element : element.closest('a');
           if (linkElement) {
@@ -72,7 +66,6 @@ export const navigationAction = (
           }
         }
         
-        // 일반 요소도 클릭 시도 (버튼 등)
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         element.click();
         return { type: "element_found", ownerId: foundItem.ownerId };

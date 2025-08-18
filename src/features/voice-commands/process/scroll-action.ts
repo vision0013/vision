@@ -6,9 +6,8 @@ export const scrollAction = (
   targetText: string, 
   items: CrawledItem[]
 ): VoiceCommandResult => {
-  // 방향 키워드 분석
   const lowerText = targetText.toLowerCase();
-  let direction = 'down'; // 기본값
+  let direction = 'down';
   
   if (lowerText.includes('위') || lowerText.includes('올려') || lowerText.includes('업')) {
     direction = 'up';
@@ -17,8 +16,9 @@ export const scrollAction = (
   }
   
   // 특정 요소로 스크롤하는 경우
-  if (targetText && !['위', '아래', '올려', '내려', '위로', '아래로'].includes(targetText)) {
-    const foundItem = findBestMatch(targetText, items);
+  if (targetText && !['위', '아래', '올려', '내려', '위로', '아래로'].some(keyword => lowerText.includes(keyword))) {
+    // ✨ [수정] findBestMatch 호출 시 direction 인수로 null 전달
+    const foundItem = findBestMatch(targetText, items, null);
     
     if (foundItem?.ownerId) {
       const element = document.querySelector(`[data-crawler-id="${foundItem.ownerId}"]`) as HTMLElement;
@@ -30,7 +30,7 @@ export const scrollAction = (
   }
   
   // 일반 페이지 스크롤
-  const scrollDistance = 300; // 스크롤 거리
+  const scrollDistance = 300;
   const currentY = window.scrollY;
   const targetY = direction === 'up' ? currentY - scrollDistance : currentY + scrollDistance;
   
