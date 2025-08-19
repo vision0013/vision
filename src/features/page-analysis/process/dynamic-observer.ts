@@ -43,23 +43,13 @@ function detectElementMoves(mutations: MutationRecord[]): HTMLElement[] {
     addedElements.has(el) && el.hasAttribute('data-crawler-id')
   ) as HTMLElement[];
   
-  // 위치나 속성 변화로 인한 이동 요소들
-  const indirectlyMovedElements = [...positionChangedElements].filter(el => {
-    const rect = el.getBoundingClientRect();
-    // 요소가 화면에서 크게 이동했는지 확인 (임계값: 100px)
-    const prevRect = el.dataset.prevRect ? JSON.parse(el.dataset.prevRect) : rect;
-    const moved = Math.abs(rect.top - prevRect.top) > 100 || 
-                  Math.abs(rect.left - prevRect.left) > 100;
-    
-    // 현재 위치 저장
-    el.dataset.prevRect = JSON.stringify({
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height
-    });
-    
-    return moved;
+  // 위치 변화 감지 최적화: getBoundingClientRect 호출 최소화
+  const indirectlyMovedElements: HTMLElement[] = [];
+  
+  // 성능 최적화: 위치 체크는 스킵하고 속성 변화만으로 판단
+  positionChangedElements.forEach(el => {
+    // 단순히 속성이 변했다면 재분석 대상으로 포함
+    indirectlyMovedElements.push(el);
   });
   
   const allMovedElements = [...directlyMovedElements, ...indirectlyMovedElements];
@@ -114,39 +104,24 @@ function detectPortalNavigationChanges(mutations: MutationRecord[]): HTMLElement
 }
 
 function scanChildrenWithoutIds(parentElement: HTMLElement): CrawledItem[] {
+  // 성능 최적화: 깊은 스캔 대신 직접 자식만 체크
   const tempState = createCrawlerState();
-  const elementsWithoutIds: HTMLElement[] = [];
+  const targetTags = ['a', 'button', 'input', 'textarea', 'select'];
   
-  // 부모 요소 내부에서 data-crawler-id가 없는 요소들 찾기
-  const walker = document.createTreeWalker(
-    parentElement,
-    NodeFilter.SHOW_ELEMENT,
-    {
-      acceptNode: (node) => {
-        const element = node as HTMLElement;
-        if (!element.hasAttribute('data-crawler-id') && element !== parentElement) {
-          return NodeFilter.FILTER_ACCEPT;
-        }
-        return NodeFilter.FILTER_SKIP;
-      }
-    }
-  );
+  // 직접 자식 요소들만 빠르게 스캔 (TreeWalker 대신 querySelector 사용)
+  const selector = targetTags
+    .map(tag => `${tag}:not([data-crawler-id])`)
+    .join(', ');
   
-  let currentNode = walker.nextNode();
-  while (currentNode) {
-    if (currentNode instanceof HTMLElement) {
-      elementsWithoutIds.push(currentNode);
-    }
-    currentNode = walker.nextNode();
-  }
+  const elementsWithoutIds = parentElement.querySelectorAll(selector) as NodeListOf<HTMLElement>;
   
-  // ID 없는 요소들을 개별적으로 스캔 (재귀 없이)
+  // 빠른 스캔: 중요한 요소들만 처리
   elementsWithoutIds.forEach(el => {
     walkSingleElement(el, tempState);
   });
   
   if (elementsWithoutIds.length > 0) {
-    console.log(`🔍 Scanned ${elementsWithoutIds.length} elements without IDs in moved container`);
+    console.log(`🔍 Fast-scanned ${elementsWithoutIds.length} target elements in changed container`);
   }
   
   return tempState.items;
@@ -204,6 +179,7 @@ function handleMutations(state: ObserverState, mutations: MutationRecord[]): voi
   }
   
   state.observerTimeout = window.setTimeout(() => {
+    const startTime = performance.now();
     // 1. 포털 이동 감지
     const movedElements = detectElementMoves(mutations);
     
@@ -263,14 +239,15 @@ function handleMutations(state: ObserverState, mutations: MutationRecord[]): voi
     if (allNewItems.length > 0) {
       const uniqueNewItems = removeDuplicates(allNewItems);
       const totalPortalElements = movedElements.length + portalChangedElements.length;
-      console.log(`✅ Found ${uniqueNewItems.length} new items (${totalPortalElements > 0 ? `including ${totalPortalElements} portal elements` : 'regular changes'})`);
+      const elapsed = (performance.now() - startTime).toFixed(1);
+      console.log(`✅ Found ${uniqueNewItems.length} new items in ${elapsed}ms (${totalPortalElements > 0 ? `including ${totalPortalElements} portal elements` : 'regular changes'})`);
       state.onNewItemsFound(uniqueNewItems);
     } else {
-      console.log(`📝 No new crawlable items found.`);
+      const elapsed = (performance.now() - startTime).toFixed(1);
+      console.log(`📝 No new crawlable items found (${elapsed}ms).`);
     }
-    
     state.observerTimeout = null;
-  }, 800); // 800ms 디바운싱
+  }, 300); // 300ms 디바운싱 (더 빠른 응답)
 }
 
 let globalObserverState: ObserverState | null = null;
