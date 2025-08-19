@@ -1,4 +1,4 @@
-import { ICrawler, CrawledItem } from '../../../types';
+import { ICrawler, CrawledItem } from '@/types';
 import { CrawlerState } from '../types/crawler-state';
 import { createCrawlerState } from './state-management';
 import { removeDuplicates } from './dom-walking';

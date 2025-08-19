@@ -1,5 +1,5 @@
 import React from 'react';
-import { CrawledItem } from '../../types';
+import { CrawledItem } from '@/types';
 
 interface ResultsListProps {
   items: CrawledItem[];

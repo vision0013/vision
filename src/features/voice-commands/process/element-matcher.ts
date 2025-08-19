@@ -1,4 +1,4 @@
-import { CrawledItem } from "../../../types";
+import { CrawledItem } from "@/types";
 import { selectBestMatch } from "./priority-resolver";
 
 function findCandidates(targetText: string, items: CrawledItem[]): CrawledItem[] {

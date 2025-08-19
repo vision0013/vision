@@ -1,4 +1,4 @@
-import { ItemType } from "../../../types";
+import { ItemType } from "@/types";
 
 export interface PriorityConfig {
   // 타입별 기본 우선순위 (높을수록 우선)

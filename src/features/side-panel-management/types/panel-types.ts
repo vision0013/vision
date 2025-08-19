@@ -1,4 +1,4 @@
-import { AnalysisResult, CrawledItem } from '../../../types';
+import { AnalysisResult, CrawledItem } from '@/types';
 
 export interface TabData {
   analysisResult: AnalysisResult | null;

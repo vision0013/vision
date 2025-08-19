@@ -1,7 +1,7 @@
 // Features Barrel Exports
 
 // Page Analysis
-export * from './page-analysis';
+export * from './page-analysis/crawling';
 
 // Voice Commands
 export * from './voice-commands';

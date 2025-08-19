@@ -1,4 +1,4 @@
-import { CrawledItem } from '../../../types';
+import { CrawledItem } from '@/types';
 import { CrawlerState } from '../types/crawler-state';
 import { isCurrentlyVisible, bbox } from './element-analysis';
 

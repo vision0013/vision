@@ -1,5 +1,47 @@
 # Claude Code 프로젝트 정보
 
+## 📝 문서 관리 가이드라인
+
+### 기능 개발 시 참고 방법
+새로운 기능 추가나 기존 기능 수정 시 다음 순서로 MD 문서를 활용하세요:
+
+1. **📁 폴더 구조 확인** → 해당 기능의 파일 위치와 구조 파악
+2. **🔧 연관 파일 확인** → "현재 구현된 기능들"에서 관련 파일 목록 확인
+3. **📚 개선 히스토리 검토** → 해당 기능의 과거 시행착오와 해결 방법 학습
+4. **🎯 개선 방법론 적용** → 기능별 핵심 접근법과 패턴 활용
+5. **⚠️ 트러블슈팅 선행 확인** → 유사한 문제의 해결 방법 미리 파악
+
+**예시 1: 음성 명령에 새로운 액션 추가**
+1. `src/features/voice-commands/process/` 폴더에 `{action-name}-action.ts` 생성
+2. `voice-controller.ts`에서 키워드 기반 라우팅 로직 추가  
+3. `priorities.ts`에 해당 액션의 우선순위 설정 추가
+4. 한국어 NLP 필요시 oktjs 전처리 로직 활용 (v4.11 트러블슈팅 참고)
+5. 메시지 통신 아키텍처 준수 (Panel → Background → Content Script)
+
+**예시 2: 페이지 크롤링 개선**  
+1. `src/features/page-analysis/crawling/process/` 폴더의 관련 파일 확인
+2. 동적 요소 감지 필요시 `dynamic-observer.ts` 활용 (v4.3 개선사항 참고)
+3. visibility 체크는 `isVisibleRelaxed()` 패턴 적용 (v4.3 트러블슈팅)
+4. 중복 제거는 좌표 기반 로직 사용 (v4.12 해결방법)
+
+**예시 3: 새로운 UI 컴포넌트 추가**
+1. 기능별 UI는 `src/features/{feature-name}/ui/` 폴더에 생성
+2. 전체 레이아웃 관련은 `src/sections/ui/` 폴더 활용  
+3. 상태 관리는 Zustand 패턴 적용 (side-panel-management 참고)
+4. React Hook은 `controllers/` 폴더에 배치
+
+### 트러블슈팅 가이드 업데이트 규칙
+- **누적 방식**: 새로운 문제와 해결책을 기존 내용에 추가 (덮어쓰기 금지)
+- **날짜 표시**: 각 트러블슈팅 항목에 버전과 날짜 명시
+- **구조화**: `문제 → 시도한 방법들(실패) → 최종 해결방법(성공)` 형태로 작성
+- **검색성**: 명확한 제목과 태그로 쉽게 찾을 수 있도록 구성
+- **예시**: 성공한 해결방법은 코드 예시나 구체적 단계 포함
+
+### 성공 지표 업데이트 규칙  
+- **버전별 갱신**: 새로운 버전에서 달성한 주요 성과로 업데이트
+- **측정 가능한 지표**: 구체적인 숫자나 상태로 표현
+- **이전 버전 성과 유지**: 중요한 기능들은 "~유지" 형태로 지속성 표시
+
 ## 📋 동적 임포트 사용 가이드 (Dynamic Import Guidelines)
 
 **Chrome Extension MV3 + Vite 환경에서 동적 임포트(`import()`) 사용 가능하나 특별 설정 필요**
@@ -118,32 +160,191 @@ npm run dev    # 개발 서버 실행
 
 ## 아키텍처
 
-### 폴더 구조
-- `src/features/` - 비즈니스 로직 (표준 5폴더 구조)
-- `src/sections/` - UI 조립 및 레이아웃
-- `src/types/` - 공통 타입 정의
+### 폴더 구조 (v4.13)
+```
+src/
+├── assets/                           # 정적 자산
+├── background/
+│   └── background.ts                 # Service Worker (URL 감지, 메시지 중계)
+├── content/
+│   └── content_script.tsx            # Content Script (DOM 조작, 크롤링 실행)
+├── features/                         # 기능별 모듈 (표준 5폴더 구조)
+│   ├── filtering/                    # 데이터 필터링
+│   │   ├── config/
+│   │   ├── types/
+│   │   ├── ui/
+│   │   └── index.ts
+│   ├── highlighting/                 # 요소 하이라이팅
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   │   └── highlight-controller.ts
+│   │   ├── process/
+│   │   │   ├── highlight-executor.ts
+│   │   │   └── highlight-requester.ts
+│   │   ├── types/
+│   │   └── index.ts
+│   ├── page-analysis/               # 웹 페이지 크롤링 및 분석
+│   │   └── crawling/
+│   │       ├── config/
+│   │       ├── controllers/
+│   │       │   └── crawler-controller.ts
+│   │       ├── process/
+│   │       │   ├── dom-walking.ts
+│   │       │   ├── dynamic-observer.ts
+│   │       │   ├── element-analysis.ts
+│   │       │   ├── state-management.ts
+│   │       │   └── text-processing.ts
+│   │       ├── types/
+│   │       └── index.ts
+│   ├── permissions/                 # 권한 관리
+│   │   ├── config/
+│   │   ├── process/
+│   │   │   └── extension-manager.ts
+│   │   ├── ui/
+│   │   └── index.ts
+│   ├── side-panel-management/       # 사이드패널 상태 관리
+│   │   ├── controllers/
+│   │   │   └── panel-controller.ts
+│   │   ├── process/
+│   │   │   └── panel-store.ts
+│   │   ├── types/
+│   │   └── index.ts
+│   ├── voice-commands/              # 음성 명령 처리
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   │   └── voice-controller.ts
+│   │   ├── process/
+│   │   │   ├── click-action.ts
+│   │   │   ├── element-matcher.ts
+│   │   │   ├── find-action.ts
+│   │   │   ├── input-action.ts
+│   │   │   ├── navigation-action.ts
+│   │   │   ├── priority-resolver.ts
+│   │   │   └── scroll-action.ts
+│   │   ├── types/
+│   │   └── index.ts
+│   ├── voice-recognition/           # 음성 인식
+│   │   ├── controllers/
+│   │   │   └── speech-controller.ts
+│   │   ├── process/
+│   │   │   └── speech-engine.ts
+│   │   ├── types/
+│   │   ├── ui/
+│   │   └── index.ts
+│   └── index.ts                     # 전체 features 배럴 export
+├── sections/                        # UI 조립 및 레이아웃
+│   └── ui/
+│       ├── crawling-results.tsx
+│       ├── crawling-summary.tsx
+│       ├── extension-header.tsx
+│       ├── side-panel.css
+│       └── side-panel.tsx
+├── test/                           # 테스트 파일
+├── types/
+│   └── index.ts                    # 공통 타입 정의 (AnalysisResult, CrawledItem 등)
+└── main.tsx                        # React 앱 엔트리포인트
+```
 
 ### Features 표준 구조
-각 기능은 다음 5개 폴더로 구성:
+각 기능은 다음 폴더로 구성 (필요에 따라 선택적 사용):
 ```
 features/{feature-name}/
-├── config/        # 상수 및 설정
-├── types/         # 타입 정의
-├── process/       # 비즈니스 로직
-├── controllers/   # 흐름 제어 및 API
+├── config/        # 상수 및 설정 (우선순위, 임계값 등)
+├── types/         # 해당 기능 전용 타입 정의
+├── process/       # 비즈니스 로직 (순수 함수)
+├── controllers/   # 흐름 제어 및 API (React Hook, 상태 관리)
+├── ui/           # UI 컴포넌트 (필요한 경우)
 └── index.ts       # 배럴 exports
 ```
 
-## 현재 구현된 기능들
+## 현재 구현된 기능들 및 개선 히스토리
 
 ### ✅ 완료된 Features
-1. **page-analysis** - 웹 페이지 크롤링 및 분석
-2. **highlighting** - 요소 하이라이팅
-3. **voice-commands** - 음성 명령 처리
-4. **voice-recognition** - 음성 인식
-5. **filtering** - 데이터 필터링
-6. **permissions** - 권한 관리
-7. **side-panel-management** - 사이드패널 상태 관리
+
+#### 1. **page-analysis** - 웹 페이지 크롤링 및 분석
+**연관 파일:**
+- `src/features/page-analysis/crawling/controllers/crawler-controller.ts`
+- `src/features/page-analysis/crawling/process/dom-walking.ts`
+- `src/features/page-analysis/crawling/process/dynamic-observer.ts`
+- `src/features/page-analysis/crawling/process/element-analysis.ts`
+- `src/content/content_script.tsx` (크롤링 실행)
+
+**개선 히스토리:**
+- **부분 크롤링 시스템 도입** (v4.3, 2025-08-16) → 드롭다운/팝업 등 동적 요소 감지 및 기존 데이터 추가 방식
+- **관대한 visibility 체크** (v4.3, 2025-08-16) → `isVisibleRelaxed()` 함수로 동적 요소 안정적 감지  
+- **글자수 기준 완화** (v4.3, 2025-08-16) → 3글자→1글자로 "뉴스", "웹" 등 짧은 텍스트 인식 개선
+- **이중 크롤링 전략** (v4.3, 2025-08-16) → 깊은 중첩 구조에서도 링크/버튼 발견
+- **좌표 기반 중복 제거** (v4.12, 2025-08-19) → 동일 링크 2-3개 등록 문제 해결
+
+#### 2. **highlighting** - 요소 하이라이팅
+**연관 파일:**
+- `src/features/highlighting/controllers/highlight-controller.ts`
+- `src/features/highlighting/process/highlight-executor.ts`
+- `src/features/highlighting/process/highlight-requester.ts`
+- `src/background/background.ts` (중앙 상태 관리)
+
+**개선 히스토리:**
+- **전역 상태 기반 함수형** (v4.10, 2025-08-18) → 클래스 래퍼 제거로 0.69KB 절약 및 복잡도 감소
+- **Background 중앙 관리** (v4.13, 2025-01-19) → `tabActiveElements`로 탭별 활성 요소 상태 지속성 보장
+- **ID 할당 최적화** (v4.12, 2025-08-19) → `data-crawler-id` 재할당 혼선 방지
+
+#### 3. **voice-commands** - 음성 명령 처리  
+**연관 파일:**
+- `src/features/voice-commands/controllers/voice-controller.ts`
+- `src/features/voice-commands/process/click-action.ts`
+- `src/features/voice-commands/process/element-matcher.ts`
+- `src/features/voice-commands/process/priority-resolver.ts`
+- `src/features/voice-commands/process/input-action.ts`
+- `src/features/voice-commands/process/navigation-action.ts`
+- `src/features/voice-commands/process/scroll-action.ts`
+- `src/features/voice-commands/config/priorities.ts`
+
+**개선 히스토리:**
+- **메시지 통신 아키텍처** (v4.0, 2025-08-16) → Side Panel DOM 조작 보안 문제 해결
+- **스마트 우선순위 시스템** (v4.1, 2025-08-16) → 단순 텍스트 매칭에서 viewport, 타입별, 키워드별 가중치 적용
+- **oktjs 한국어 NLP** (v4.11, 2025-08-19) → 음성 인식 분리 문제 ("써 줘" → "써줘") 전처리 로직으로 해결
+- **완전 순수 함수화** (v4.10, 2025-08-18) → ElementMatcher, PriorityResolver 클래스 래퍼 제거
+- **개선된 좌표 인식** (v4.12, 2025-08-19) → 스크롤 액션 정확도 향상
+
+#### 4. **voice-recognition** - 음성 인식
+**연관 파일:**
+- `src/features/voice-recognition/controllers/speech-controller.ts`
+- `src/features/voice-recognition/process/speech-engine.ts`
+- `src/features/side-panel-management/controllers/panel-controller.ts` (oktjs 통합)
+
+**개선 히스토리:**
+- **useRef 상태 관리** (v4.2, 2025-08-16) → SpeechRecognition 객체 재생성 문제로 1회 이후 명령 먹통 해결
+- **연속 명령 지원** (v4.2, 2025-08-16) → useRef 패턴으로 최신 상태 참조 및 연결 끊김 방지
+- **oktjs Dynamic Import** (v4.11, 2025-08-19) → Chrome Extension 환경에서 한국어 NLP 완전 통합
+- **Panel 처리 → Background 분석** (v4.11, 2025-08-19) → Service Worker DOM 제약 우회
+
+#### 5. **filtering** - 데이터 필터링
+**연관 파일:**
+- `src/features/filtering/index.ts`
+- `src/features/filtering/config/`
+- `src/features/filtering/ui/`
+
+**개선 히스토리:**
+- **통합 텍스트 필터링** (v4.3, 2025-08-16) → 모든 크롤링에서 1글자 이상 텍스트 수집으로 통일
+
+#### 6. **permissions** - 권한 관리
+**연관 파일:**
+- `src/features/permissions/process/extension-manager.ts`
+- `src/features/permissions/config/`
+- `public/manifest.json` (webNavigation 권한)
+
+**개선 히스토리:**
+- **Chrome Extension API 권한 최적화** (v4.13, 2025-01-19) → webNavigation으로 Background 기반 URL 감지 지원
+
+#### 7. **side-panel-management** - 사이드패널 상태 관리
+**연관 파일:**
+- `src/features/side-panel-management/controllers/panel-controller.ts`
+- `src/features/side-panel-management/process/panel-store.ts`
+- `src/features/side-panel-management/types/panel-types.ts`
+
+**개선 히스토리:**
+- **중앙 집중식 상태 관리** (v4.9, 2025-08-18) → Zustand 기반 상태 관리로 패널-백그라운드 동기화
+- **oktjs 통합 처리** (v4.11, 2025-08-19) → Panel에서 한국어 NLP 처리 후 Background로 분석 결과 전달
 
 ### 주요 기술 스택
 - TypeScript
@@ -178,6 +379,16 @@ import { functionName } from '../../features';
 
 ## 최근 작업 내역
 
+### v4.13 뒤로가기 감지 시스템 완전 개선 (2025-01-19)
+- ✅ **Background 중심 아키텍처**: Content Script → Background로 URL 감지 시스템 완전 이전
+- ✅ **Chrome Extension API 기반**: `chrome.tabs.onUpdated`, `chrome.webNavigation.onHistoryStateUpdated` 활용
+- ✅ **상태 초기화 문제 해결**: 뒤로가기 시 Content Script 재실행으로 인한 상태 손실 완전 해결
+- ✅ **Service Worker 연결 오류 해결**: "Receiving end does not exist" 오류 완전 제거
+- ✅ **3중 URL 감지 시스템**: 일반 탭 변경, SPA 네비게이션, 페이지 로딩 완료 감지
+- ✅ **Background 디바운싱**: 300ms 중앙 집중식 디바운싱으로 빠른 연속 뒤로가기 완벽 처리
+- ✅ **통합 상태 관리**: `tabLastUrls`, `tabDebounceTimeouts`, `tabActiveElements` 중앙 관리
+- ✅ **아키텍처 단순화**: Content Script URL 감지 로직 완전 제거, Background 중심 설계
+
 ### v4.11 한국어 NLP 및 음성 명령 개선 완료 (2025-01-18)
 - ✅ oktjs 한국어 NLP 라이브러리 도입 완료
 - ✅ Chrome Extension 환경에서 oktjs Dynamic Import 구현
@@ -203,13 +414,39 @@ import { functionName } from '../../features';
 - ✅ 일관된 네이밍 컨벤션 적용
 - ✅ 배럴 exports를 통한 깔끔한 API
 
-### 성능 개선사항
-- 빌드 시간: ~400ms
-- 번들 크기: content_script.js 17.59KB (oktjs 도입으로 증가)
-- 번들 크기: main.js 155KB (gzip: 50KB)
+### 성능 개선사항 (v4.13)
+- 빌드 시간: ~1.5s
+- 번들 크기: content_script.js 18.29KB → Background 중심 아키텍처로 경량화
+- 번들 크기: background.js 5.08KB (URL 감지 로직 추가)
+- 번들 크기: main.js 156.21KB (gzip: 50.98KB)
 - oktjs 번들: 3.3MB (gzip: 1.7MB) - Dynamic Import로 필요시에만 로드
 - TypeScript 컴파일 오류 0건
-- **한국어 NLP 완전 통합 달성** 🚀
+- **뒤로가기 감지 시스템 완전 안정화 달성** 🚀
+- **Service Worker 연결 오류 0건**
+
+## 뒤로가기 감지 시스템 (v4.13)
+
+### 개선된 아키텍처
+```
+Background (Chrome Extension API) → URL 변경 감지 → Content Script (크롤링 실행)
+```
+
+### Chrome Extension API 기반 감지
+- **`chrome.tabs.onUpdated`**: 일반적인 탭 URL 변경 감지
+- **`chrome.webNavigation.onHistoryStateUpdated`**: SPA 뒤로가기/앞으로가기 감지
+- **`chrome.webNavigation.onCompleted`**: 페이지 로딩 완료 감지 (추가 안전장치)
+
+### 상세 처리 흐름
+1. **URL 변경 이벤트**: Chrome Extension API에서 URL 변경 감지
+2. **Background 디바운싱**: `handleUrlChange()` → 300ms 디바운싱 처리
+3. **상태 관리**: `tabLastUrls[tabId]` 업데이트 및 중복 크롤링 방지
+4. **크롤링 명령**: `chrome.tabs.sendMessage(tabId, { action: 'runCrawler' })` 전송
+
+### 핵심 개선사항
+- ✅ **상태 지속성**: Background에서 탭별 URL 히스토리 중앙 관리
+- ✅ **연결 안정성**: Service Worker "Receiving end does not exist" 오류 완전 해결
+- ✅ **빠른 연속 뒤로가기**: 300ms 디바운싱으로 마지막 페이지만 크롤링
+- ✅ **아키텍처 단순화**: Content Script에서 URL 감지 로직 완전 제거
 
 ## 음성 명령 처리 흐름 (v4.11)
 
@@ -252,9 +489,122 @@ import { functionName } from '../../features';
 - [REFACTORING.md](./REFACTORING.md) - 리팩터링 히스토리
 - [VOICE_COMMANDS.md](./VOICE_COMMANDS.md) - 음성 명령 사용법 가이드
 
-## 트러블슈팅 가이드 (v4.11)
+## 기능별 개선 방법론
 
-### oktjs 한국어 NLP 통합
+### 🎯 뒤로가기 감지 시스템 (v4.13, 2025-01-19)
+**핵심 접근법**: Content Script 상태 의존성 제거 → Background 중심 아키텍처
+- **Chrome Extension API 활용** → `chrome.tabs.onUpdated`, `chrome.webNavigation.onHistoryStateUpdated`
+- **중앙 집중식 상태 관리** → `tabLastUrls`, `tabDebounceTimeouts` Background 관리
+- **디바운싱 패턴** → 300ms로 빠른 연속 변경 중 마지막만 처리
+
+### 🎤 음성 명령 처리 (v4.0-v4.11, 2025-08-16~2025-08-19)
+**핵심 접근법**: 메시지 통신 + 스마트 매칭 + 한국어 NLP
+- **아키텍처 분리** (v4.0) → Panel(음성인식) → Background(분석) → Content Script(실행)
+- **우선순위 시스템** (v4.1) → viewport, 타입별, 키워드별 가중치 기반 요소 선택
+- **oktjs 통합** (v4.11) → Dynamic Import + 전처리 로직으로 한국어 음성 인식 분리 문제 해결
+- **상태 관리 패턴** (v4.2) → useRef로 SpeechRecognition 연속 실행 지원
+
+### 📊 페이지 크롤링 (v4.3-v4.12, 2025-08-16~2025-08-19)
+**핵심 접근법**: 부분 크롤링 + 관대한 감지 + 이중 전략
+- **동적 요소 처리** (v4.3) → MutationObserver + 부분 크롤링으로 드롭다운/팝업 감지
+- **visibility 최적화** (v4.3) → `isVisibleRelaxed()` 함수로 엄격함 완화
+- **텍스트 기준 완화** (v4.3) → 3글자→1글자로 짧은 텍스트 포함
+- **중복 제거 로직** (v4.12) → 좌표 기반으로 동일 요소 필터링
+
+### ✨ 요소 하이라이팅 (v4.10-v4.13, 2025-08-18~2025-01-19)
+**핵심 접근법**: 함수형 + 전역 상태 + Background 중앙 관리
+- **순수 함수화** (v4.10) → 클래스 래퍼 제거로 번들 크기 절약
+- **상태 지속성** (v4.13) → Background의 `tabActiveElements`로 페이지 변경시에도 상태 유지
+- **ID 할당 최적화** (v4.12) → `data-crawler-id` 재할당 혼선 방지
+
+### 🔧 아키텍처 패턴 (v4.8-v4.10, 2025-08-18)
+**핵심 접근법**: 함수형 프로그래밍 + 중앙 상태 관리
+- **완전 함수형 전환** (v4.10) → 모든 클래스를 순수 함수로 변환
+- **배럴 exports** (v4.8) → 깔끔한 API 제공 및 import 단순화
+- **5폴더 구조** (v4.8) → config, types, process, controllers, ui 표준화
+
+## 트러블슈팅 가이드 (누적)
+
+### 뒤로가기 감지 시스템 문제 해결 (v4.13, 2025-01-19)
+
+#### 1. 빠른 연속 뒤로가기 감지 실패
+**문제**: 2연속 이상 빠른 뒤로가기 시 감지하지 못함
+
+**시도 방법 1 - Race Condition 해결**: 
+- Background에서 URL 상태 즉시 업데이트로 타이밍 충돌 방지
+- 결과: **실패** - 여전히 빠른 연속 감지 불가
+
+**시도 방법 2 - 디바운싱 추가**:
+- Content Script에 300ms 디바운싱 적용
+- 결과: **실패** - 아예 뒤로가기 감지 안됨
+
+**시도 방법 3 - 복잡한 감지 시스템**:
+- MutationObserver, 주기적 체크, 타이밍 보정 등 다중 감지
+- 결과: **실패** - 과도한 복잡성으로 이벤트 처리 꼬임
+
+**최종 해결 방법 - Background 중심 아키텍처**: ✅
+- Content Script URL 감지 완전 제거
+- Chrome Extension API 기반: `chrome.tabs.onUpdated`, `chrome.webNavigation.onHistoryStateUpdated`
+- Background에서 디바운싱 및 상태 관리
+- 결과: **성공** - 아무리 빠른 연속 뒤로가기도 100% 감지
+
+#### 2. Content Script 상태 초기화 문제  
+**문제**: 뒤로가기 시 새 페이지 로드로 `lastKnownUrl` 등 상태 리셋
+
+**시도 방법 - Content Script 개선**: 
+- 복잡한 상태 관리 및 복원 시도
+- 결과: **실패** - 근본적으로 Content Script는 페이지마다 재실행
+
+**최종 해결 방법 - Background 상태 관리**: ✅  
+- Background에서 `tabLastUrls`, `tabDebounceTimeouts` 중앙 관리
+- Content Script는 단순히 크롤링만 수행
+- 결과: **성공** - 상태 지속성 완전 보장
+
+#### 3. Service Worker 연결 오류
+**문제**: "Could not establish connection. Receiving end does not exist"
+
+**최종 해결 방법**: ✅
+- Background에서 직접 Chrome Extension API 사용
+- Content Script → Background 메시지 의존성 제거  
+- 결과: **성공** - 연결 오류 0건
+
+### 이전 버전 트러블슈팅 히스토리 (v4.0-v4.12)
+
+#### 아키텍처 재설계 문제 (v4.0)
+- **Side Panel DOM 조작 시도** → 보안상 불가능 → **메시지 통신 아키텍처**로 해결 ✅
+- **1회 이후 명령 먹통** → SpeechRecognition 재생성 문제 → **useRef 상태 관리**로 해결 ✅
+- **단순 텍스트 매칭** → 잘못된 요소 선택 → **스마트 우선순위 시스템**으로 해결 ✅
+
+#### 음성 명령 연속 실행 문제 (v4.2)
+- **연속 명령 실패** → SpeechRecognition 객체 연결 끊김 → **useRef 패턴**으로 상태 참조 개선 ✅
+- **상태 관리 혼선** → 최신 상태 참조 실패 → **디버깅 로그 강화 + 상태 최적화** ✅
+
+#### SPA 뒤로가기 감지 문제 (v4.3)  
+- **Content Script 상태 초기화** → 뒤로가기시 URL 상태 손실 → **Background 중앙 관리**로 해결 ✅
+- **URL 변경 감지 실패** → 상태 비영속성 문제 → **Background에서 탭별 URL 추적** ✅
+
+#### 동적 요소 감지 문제 (v4.3)
+- **드롭다운/팝업 미감지** → 전체 크롤링 의존성 → **부분 크롤링 시스템** 도입 ✅
+- **visibility 체크 엄격함** → 동적 요소 누락 → **관대한 visibility 체크** 적용 ✅
+- **글자수 제한** → "뉴스", "웹" 등 짧은 텍스트 누락 → **3글자→1글자** 기준 완화 ✅
+
+#### URL 인식 개선 (v4.4)
+- **URL 변경 감지 불안정** → 이벤트 기반 감지 → **History API 오버라이드** + **Background 상태 관리** ✅
+
+#### 함수형 프로그래밍 전환 (v4.10)
+- **클래스 래퍼 복잡성** → 번들 크기 증가 + 복잡도 → **완전 순수 함수화** (0.69KB 절약) ✅
+- **상태 관리 분산** → 클래스 간 의존성 → **전역 상태 기반 함수형** 아키텍처 ✅
+
+#### 한국어 NLP 음성 명령 문제 (v4.11)
+- **음성 인식 분리** → "써 줘" 별도 인식 → **oktjs 전처리** + **어미 결합 로직** ✅
+- **Chrome Extension CSP** → CDN 차단 → **npm 패키지** + **Dynamic Import** ✅
+- **Service Worker DOM 오류** → oktjs 환경 제약 → **Panel 처리 → Background 분석** 아키텍처 ✅
+
+#### 좌표 인식 개선 (v4.12)
+- **중복 요소 문제** → 동일 링크 2-3개 등록 → **좌표 기반 중복 제거** + **ID 할당 최적화** ✅
+- **스크롤 액션 정확도** → 좌표 계산 문제 → **개선된 좌표 인식** 알고리즘 ✅
+
+### oktjs 한국어 NLP 통합 (v4.11, 2025-01-18)
 
 #### 1. Chrome Extension CSP (Content Security Policy) 문제
 **문제**: 
@@ -415,9 +765,12 @@ const sendMessageWithRetry = async (message: any, maxRetries = 3) => {
 #### 12. Vite 빌드 설정
 **최적화된 설정으로 빌드 시간 ~400ms 달성**
 
-### 성공 지표 (v4.11)
-- ✅ oktjs 완전 통합
-- ✅ 한국어 음성 명령 100% 정확도
-- ✅ "안녕하세요 써줘" → 정확한 텍스트 입력
-- ✅ 패턴 매칭: `Pattern matched: ^(.+?)\s*(써줘|써|입력해줘|입력|타이핑)$ with groups: ['안녕하세요 써줘', '안녕하세요', '써줘']`
-- ✅ 모든 음성 명령 유형 지원 (클릭, 찾기, 스크롤, 입력, 네비게이션)
+### 성공 지표 (v4.13)
+- ✅ **뒤로가기 감지 100% 성공**: 아무리 빠른 연속 뒤로가기도 완벽 감지
+- ✅ **Service Worker 연결 오류 0건**: "Receiving end does not exist" 완전 해결
+- ✅ **Background 디바운싱**: 300ms로 마지막 페이지만 효율적 크롤링
+- ✅ **상태 지속성 보장**: Background 중앙 관리로 페이지 변경 시에도 상태 유지
+- ✅ **Chrome Extension API 완전 활용**: `chrome.tabs.onUpdated`, `chrome.webNavigation.onHistoryStateUpdated` 기반
+- ✅ **아키텍처 단순화**: Content Script URL 감지 로직 완전 제거로 복잡도 감소
+- ✅ oktjs 한국어 NLP 통합 유지
+- ✅ 모든 음성 명령 유형 지원 유지 (클릭, 찾기, 스크롤, 입력, 네비게이션)

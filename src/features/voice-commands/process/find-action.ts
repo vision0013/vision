@@ -1,4 +1,4 @@
-import { CrawledItem } from "../../../types";
+import { CrawledItem } from "@/types";
 import { VoiceCommandResult } from "../types/voice-types";
 import { applyHighlightToElement } from "../../highlighting";
 import { findBestMatch } from "./element-matcher";

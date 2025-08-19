@@ -1,4 +1,4 @@
-import { CrawledItem, AnalysisResult, ICrawler } from '../../../types';
+import { CrawledItem, AnalysisResult, ICrawler } from '@/types';
 import { CrawlerState } from '../types/crawler-state';
 import { createCrawlerState, updateVisibility } from '../process/state-management';
 import { walkElement, removeDuplicates } from '../process/dom-walking';

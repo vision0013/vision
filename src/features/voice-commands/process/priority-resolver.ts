@@ -1,4 +1,4 @@
-import { CrawledItem } from "../../../types";
+import { CrawledItem } from "@/types";
 import { ELEMENT_PRIORITIES, PriorityConfig } from "../config/priorities";
 
 export interface ScoredItem {

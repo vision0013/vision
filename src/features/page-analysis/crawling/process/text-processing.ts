@@ -1,4 +1,4 @@
-import { MAX_TEXT_LEN } from '../config/constants';
+import { MAX_TEXT_LEN } from "../config/constants";
 
 export function normText(s: string | null | undefined): string {
   return (s || "")

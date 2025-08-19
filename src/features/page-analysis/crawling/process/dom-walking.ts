@@ -1,5 +1,5 @@
-import { CrawledItem } from '../../../types';
-import { MAX_NODES, TARGET_TAGS, SKIP_TAGS } from '../config/constants';
+import { CrawledItem } from '@/types';
+import { MAX_NODES, TARGET_TAGS, SKIP_TAGS } from '../../crawling/config/constants';
 import { CrawlerState } from '../types/crawler-state';
 import { normText } from './text-processing';
 import { isCurrentlyVisible, roleOf, bbox } from './element-analysis';

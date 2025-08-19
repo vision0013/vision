@@ -1,4 +1,4 @@
-import { CrawledItem } from "../../../types";
+import { CrawledItem } from "@/types";
 import { VoiceCommandResult } from "../types/voice-types";
 import { clickAction } from "../process/click-action";
 import { findAction } from "../process/find-action";

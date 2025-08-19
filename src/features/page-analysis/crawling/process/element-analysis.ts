@@ -1,4 +1,4 @@
-import { BoundingBox } from '../../../types';
+import { BoundingBox } from '@/types';
 
 export function isCurrentlyVisible(el: HTMLElement): boolean {
   const rect = el.getBoundingClientRect();

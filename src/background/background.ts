@@ -2,6 +2,9 @@
 // 각 탭의 마지막으로 확인된 URL을 저장하는 객체
 const tabLastUrls: { [key: number]: string } = {};
 
+// URL 변경 디바운싱 관리
+const tabDebounceTimeouts: { [key: number]: NodeJS.Timeout } = {};
+
 // ✨ [신규] 중앙 상태 관리: 탭별 활성화된 요소 상태
 interface ActiveElementState {
   ownerId: number | null;
@@ -11,6 +14,40 @@ interface ActiveElementState {
 const tabActiveElements: { [tabId: number]: ActiveElementState } = {};
 
 // ✨ [신규] 활성화된 요소 상태 관리 함수들
+// ✨ [신규] URL 변경 처리 함수 (디바운싱 포함)
+function handleUrlChange(tabId: number, newUrl: string, source: string): void {
+  const lastUrl = tabLastUrls[tabId];
+  
+  console.log(`[background] 📌 ${source} detected for tab ${tabId}: ${lastUrl} → ${newUrl}`);
+  
+  if (!lastUrl || lastUrl !== newUrl) {
+    console.log(`[background] ✅ URL changed for tab ${tabId}: ${lastUrl} → ${newUrl}`);
+    
+    // 즉시 상태 업데이트
+    tabLastUrls[tabId] = newUrl;
+    
+    // 이전 디바운싱 타이머 취소
+    if (tabDebounceTimeouts[tabId]) {
+      clearTimeout(tabDebounceTimeouts[tabId]);
+      console.log(`[background] 🔄 Debounce reset for tab ${tabId}`);
+    }
+    
+    // 300ms 디바운싱 - 마지막 URL 변경만 크롤링
+    tabDebounceTimeouts[tabId] = setTimeout(async () => {
+      console.log(`[background] 🎯 Final processing for tab ${tabId}: ${newUrl}`);
+      
+      try {
+        await chrome.tabs.sendMessage(tabId, { action: 'runCrawler' });
+        console.log(`[background] Crawling triggered for tab ${tabId}`);
+      } catch (error) {
+        console.log(`[background] Cannot send runCrawler to tab ${tabId}:`, (error as Error).message);
+      }
+      
+      delete tabDebounceTimeouts[tabId];
+    }, 300);
+  }
+}
+
 function setActiveElement(tabId: number, ownerId: number | null): void {
   tabActiveElements[tabId] = {
     ownerId,
@@ -193,20 +230,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 });
 
 chrome.runtime.onMessage.addListener(async (request, sender, _sendResponse) => {
-  if (request.action === 'checkUrl' && sender.tab?.id) {
-    const tabId = sender.tab.id;
-    const currentUrl = request.url;
-    if (tabLastUrls[tabId] !== currentUrl) {
-      console.log(`[background] New URL confirmed for tab ${tabId}: ${currentUrl}`);
-      tabLastUrls[tabId] = currentUrl;
-      try {
-        await chrome.tabs.sendMessage(tabId, { action: 'runCrawler' });
-      } catch (error) {
-        console.log(`[background] Cannot send runCrawler to tab ${tabId}:`, (error as Error).message);
-      }
-    }
-    return;
-  }
+  // checkUrl 메시지는 더 이상 사용하지 않음 (Chrome API로 대체)
 
   if (sender.tab && request.action === 'crawlComplete') {
     chrome.runtime.sendMessage({
@@ -250,7 +274,37 @@ chrome.runtime.onMessage.addListener(async (request, sender, _sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabLastUrls[tabId];
-  // ✨ [신규] 탭 닫힐 때 활성 요소 상태도 정리
   delete tabActiveElements[tabId];
-  console.log(`[background] Cleaned up URL and active element state for closed tab ${tabId}.`);
+  
+  // 디바운싱 타이머도 정리
+  if (tabDebounceTimeouts[tabId]) {
+    clearTimeout(tabDebounceTimeouts[tabId]);
+    delete tabDebounceTimeouts[tabId];
+  }
+  
+  console.log(`[background] Cleaned up all state for closed tab ${tabId}.`);
+});
+
+// ✨ [신규] Chrome Extension API 기반 URL 변경 감지
+console.log('[background] 🔧 Setting up Chrome API URL detection');
+
+// 1. 일반적인 탭 URL 변경 감지
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+    handleUrlChange(tabId, tab.url, 'tabs.onUpdated');
+  }
+});
+
+// 2. SPA 네비게이션 (뒤로가기/앞으로가기) 감지  
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  if (details.frameId === 0) { // 메인 프레임만
+    handleUrlChange(details.tabId, details.url, 'webNavigation.onHistoryStateUpdated');
+  }
+});
+
+// 3. 페이지 로딩 완료 시 감지 (추가 안전장치)
+chrome.webNavigation.onCompleted.addListener((details) => {
+  if (details.frameId === 0) { // 메인 프레임만
+    handleUrlChange(details.tabId, details.url, 'webNavigation.onCompleted');
+  }
 });

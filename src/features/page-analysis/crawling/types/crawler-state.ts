@@ -1,4 +1,4 @@
-import { CrawledItem } from '../../../types';
+import { CrawledItem } from '@/types';
 
 export interface CrawlerState {
   visited: number;

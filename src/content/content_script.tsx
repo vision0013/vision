@@ -1,8 +1,8 @@
 // content_script.tsx
-import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis';
+import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
 import { processVoiceCommand } from '../features/voice-commands'; // ✨ [개선] processVoiceCommand만 import
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
-import { AnalysisResult, CrawledItem } from '../types';
+import { AnalysisResult, CrawledItem } from '@/types';
 
 let currentAnalysisResult: AnalysisResult | null = null;
 let dynamicObserverActive = false;
@@ -44,12 +44,7 @@ const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean
   return false;
 };
 
-const handleUrlChange = async () => {
-  await safeRuntimeMessage({ 
-    action: 'checkUrl', 
-    url: window.location.href 
-  });
-};
+// URL 감지는 Background에서 담당하므로 Content Script에서는 제거
 
 const runCrawler = async () => {
   if (dynamicObserverActive) {
@@ -76,21 +71,7 @@ const runCrawler = async () => {
   }
 };
 
-// URL 변경 감지 설정
-const originalPushState = history.pushState;
-history.pushState = function(...args) {
-  originalPushState.apply(history, args);
-  handleUrlChange();
-};
-const originalReplaceState = history.replaceState;
-history.replaceState = function(...args) {
-  originalReplaceState.apply(history, args);
-  handleUrlChange();
-};
-window.addEventListener('popstate', handleUrlChange);
-if ('navigation' in window && (window as any).navigation) {
-    (window as any).navigation.addEventListener('navigate', handleUrlChange);
-}
+// URL 변경 감지는 Background에서 Chrome API로 처리
 
 // 크롬 메시지 리스너
 chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
