@@ -88,7 +88,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // AI 관련 메시지를 Offscreen으로 전달하는 로직
-  if (request.action === 'getAIModelStatus' || request.action === 'deleteAIModel' || request.action === 'downloadAIModel' || request.action === 'initializeAI') {
+  if (request.action === 'getAIModelStatus' || request.action === 'deleteAIModel' || request.action === 'downloadAIModel' || request.action === 'initializeAI' || request.action === 'testAIAnalysis') {
     (async () => {
       try {
         if (!offscreenReady) {
@@ -106,12 +106,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         const actionToForward = request.action === 'downloadAIModel' ? 'downloadModel' : 
                                 request.action === 'initializeAI' ? 'initializeAI' :
-                                request.action === 'getAIModelStatus' ? 'getModelStatus' : request.action;
-        chrome.runtime.sendMessage({ action: actionToForward, token: request.token });
+                                request.action === 'getAIModelStatus' ? 'getModelStatus' :
+                                request.action === 'testAIAnalysis' ? 'analyzeIntent' : request.action;
+        chrome.runtime.sendMessage({ 
+          action: actionToForward, 
+          token: request.token,
+          command: request.command  // testAIAnalysis용 명령어 전달
+        });
 
         const responseAction = request.action === 'downloadAIModel' ? 'modelLoaded' : 
                                request.action === 'deleteAIModel' ? 'modelDeleted' : 
-                               request.action === 'initializeAI' ? 'aiInitialized' : 'modelStatusResponse';
+                               request.action === 'initializeAI' ? 'aiInitialized' :
+                               request.action === 'testAIAnalysis' ? 'analysisResult' : 'modelStatusResponse';
 
         const response = await new Promise((resolve) => {
           const listener = (msg: any) => {

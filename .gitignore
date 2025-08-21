@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Documentation files (except CLAUDE.md)
+*.md
+!CLAUDE.md

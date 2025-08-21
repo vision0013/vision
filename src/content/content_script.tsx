@@ -97,7 +97,7 @@ chrome.runtime.onMessage.addListener(async (request, _sender, _sendResponse) => 
     }
     
     
-    if (request.action === 'executeProcessedCommand') {
+    if (request.action === 'processVoiceCommand') {
       console.log('🎯 [content] Executing:', request.detectedAction, 'target:', request.targetText, 'direction:', request.direction);
       if (currentAnalysisResult?.items) {
         executeVoiceAction(request, currentAnalysisResult.items);

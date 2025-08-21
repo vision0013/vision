@@ -108,17 +108,19 @@ async function initializeOffscreen() {
         case 'analyzeIntent':
           (async () => {
             try {
-              console.log('🎯 [offscreen] Analyzing intent:', message.voiceInput);
-              const result = await aiController.analyzeIntent(message.voiceInput);
+              console.log('🎯 [offscreen] Analyzing intent:', message.command || message.voiceInput);
+              const command = message.command || message.voiceInput;
+              const result = await aiController.analyzeIntent(command);
               chrome.runtime.sendMessage({
-                action: 'intentAnalyzed',
+                action: 'analysisResult', // Background가 기대하는 응답 액션명
                 requestId: message.requestId,
-                result: result
+                result: result,
+                intent: result.intent  // 테스트 스크립트를 위한 추가 필드
               });
             } catch (error: any) {
               console.error('❌ [offscreen] Intent analysis error:', error);
               chrome.runtime.sendMessage({
-                action: 'intentAnalyzed',
+                action: 'analysisResult',
                 requestId: message.requestId,
                 error: error.message
               });

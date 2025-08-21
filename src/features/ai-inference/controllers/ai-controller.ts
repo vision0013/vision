@@ -196,34 +196,35 @@ export class AIController {
   }
 
   private buildAnalysisPrompt(voiceInput: string): string {
-    return `당신은 웹 브라우저 음성 명령 분석 전문가입니다. 사용자의 음성 명령을 분석하여 의도를 파악해주세요.
+    return `Analyze this Korean voice command: "${voiceInput}"
 
-사용자 명령: "${voiceInput}"
+Classify into one category:
+- price_comparison: price comparison requests ("최저가", "가격 비교")
+- product_search: product search ("찾아줘", "검색해줘")  
+- simple_find: find page elements ("버튼", "클릭해줘")
+- purchase_flow: purchase actions ("구매", "결제")
+- navigation: page navigation ("이전", "뒤로")
 
-다음 카테고리 중 하나로 분류해주세요:
-1. price_comparison: 가격 비교 (예: "최저가", "가격 비교")
-2. product_search: 상품 검색 (예: "찾아줘", "검색해줘")
-3. simple_find: 페이지 내 요소 찾기 (예: "버튼", "링크", "클릭")
-4. purchase_flow: 구매 관련 (예: "구매", "결제", "장바구니")
-5. navigation: 페이지 이동 (예: "이전", "다음", "뒤로")
-
-JSON 형식으로만 응답해주세요:
-{
-  "action": "카테고리",
-  "product": "상품명 (있다면)",
-  "target": "대상 요소 (있다면)",
-  "detail": "구체적 요청사항",
-  "confidence": 0.9,
-  "reasoning": "판단 근거"
-}`;
+Respond ONLY with valid JSON:
+{"action": "category_name", "confidence": 0.9}`;
   }
 
   private parseAIResponse(response: string): AIAnalysisResult {
     try {
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      console.log('🔍 [ai-controller] Raw AI response:', response);
+      
+      const jsonMatch = response.match(/\{[\s\S]*?\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in AI response');
+        console.warn('⚠️ [ai-controller] No JSON found, creating fallback response');
+        // AI가 JSON을 안 만들면 텍스트 기반 추측
+        const fallbackAction = this.guessActionFromText(response);
+        const intent: VoiceIntent = {
+          action: fallbackAction,
+          confidence: 0.5
+        };
+        return { intent, reasoning: 'Fallback analysis (non-JSON response)' };
       }
+      
       const parsedResponse = JSON.parse(jsonMatch[0]);
       const intent: VoiceIntent = {
         action: parsedResponse.action || 'unknown',
@@ -238,8 +239,19 @@ JSON 형식으로만 응답해주세요:
       };
     } catch (error: any) {
       console.error('❌ [ai-controller] Failed to parse AI response:', error);
+      console.error('❌ [ai-controller] Response was:', response);
       throw new Error('Failed to parse AI response.');
     }
+  }
+
+  private guessActionFromText(text: string): VoiceIntent['action'] {
+    const lower = text.toLowerCase();
+    if (lower.includes('price') || lower.includes('최저가') || lower.includes('가격')) return 'price_comparison';
+    if (lower.includes('search') || lower.includes('찾아') || lower.includes('검색')) return 'product_search';
+    if (lower.includes('click') || lower.includes('클릭') || lower.includes('버튼')) return 'simple_find';
+    if (lower.includes('buy') || lower.includes('구매') || lower.includes('결제')) return 'purchase_flow';
+    if (lower.includes('navigate') || lower.includes('이전') || lower.includes('뒤로')) return 'navigation';
+    return 'unknown';
   }
 }
 

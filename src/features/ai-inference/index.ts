@@ -5,7 +5,5 @@ export type {
   VoiceIntent, 
   AIAnalysisResult, 
   AIModelConfig, 
-  AIModelStatus,
-  AIInferenceState,
-  AnalysisComparison 
+  AIModelStatus
 } from './types/ai-types';

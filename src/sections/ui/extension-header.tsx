@@ -28,7 +28,6 @@ export const Header: React.FC<HeaderProps> = ({
     // 백그라운드에서 모델 상태 검사 (비차단)
     (async () => {
       console.log('🔍 [header] Checking model status in background...');
-      setAiModelStatus({ state: 2 }); // 로딩 중
       
       try {
         const response = await chrome.runtime.sendMessage({ action: 'getAIModelStatus' });
