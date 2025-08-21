@@ -66,7 +66,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     console.log('🔄 [loadModel] Setting state to 2 (loading)');
     
     // 메시지만 보내고 모든 상태 업데이트는 메시지 리스너에서 처리
-    chrome.runtime.sendMessage({ action: 'initializeAI' });
+    chrome.runtime.sendMessage({ action: 'loadAIModel' });
   };
 
   const deleteModel = async () => {

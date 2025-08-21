@@ -31,7 +31,7 @@ export interface VoiceCommandRequest extends BackgroundMessage {
 }
 
 export interface AIMessageRequest extends BackgroundMessage {
-  action: 'getAIModelStatus' | 'deleteAIModel' | 'downloadAIModel' | 'initializeAI' | 'testAIAnalysis';
+  action: 'getAIModelStatus' | 'deleteAIModel' | 'downloadAIModel' | 'initializeAI' | 'loadAIModel' | 'testAIAnalysis';
   token?: string;
   command?: string;
 }

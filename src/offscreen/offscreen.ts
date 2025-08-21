@@ -25,6 +25,7 @@ async function initializeOffscreen() {
               console.log('📊 [offscreen] AI status after initialize:', status);
               chrome.runtime.sendMessage({
                 action: 'aiInitialized',
+                requestId: message.requestId,
                 success: success,
                 status: status
               });
@@ -32,6 +33,7 @@ async function initializeOffscreen() {
               console.error('❌ [offscreen] Initialize error:', error);
               chrome.runtime.sendMessage({
                 action: 'aiInitialized',
+                requestId: message.requestId,
                 success: false,
                 error: error.message,
                 status: { state: 1, error: error.message }
@@ -48,12 +50,14 @@ async function initializeOffscreen() {
               console.log('📊 [offscreen] Model status retrieved:', status);
               chrome.runtime.sendMessage({
                 action: 'modelStatusResponse',
+                requestId: message.requestId,
                 status: status
               });
             } catch (error: any) {
               console.error('❌ [offscreen] Failed to get model status:', error);
               chrome.runtime.sendMessage({
                 action: 'modelStatusResponse',
+                requestId: message.requestId,
                 status: { isLoaded: false, isLoading: false, error: error.message }
               });
             }

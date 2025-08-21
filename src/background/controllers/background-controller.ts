@@ -17,7 +17,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
-  // 모든 메시지를 라우터에 위임
+  // 응답 메시지들은 라우팅하지 않음 (Background 내부 AI 핸들러가 처리)
+  const responseActions = ['modelStatusResponse', 'modelLoaded', 'modelDeleted', 'aiInitialized', 'analysisResult'];
+  if (responseActions.includes(request.action)) {
+    console.log(`📬 [background] Response message received: ${request.action} (handled by AI handler)`);
+    return false; // Background 내부 리스너들이 처리하도록 함
+  }
+  
+  // 요청 메시지들만 라우터에 위임
   messageRouter.route(request, sender).then(response => {
     if (response !== undefined) {
       sendResponse(response);

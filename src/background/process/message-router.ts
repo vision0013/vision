@@ -25,7 +25,8 @@ export class MessageRouter {
       'getAIModelStatus', 
       'deleteAIModel', 
       'downloadAIModel', 
-      'initializeAI', 
+      'initializeAI',
+      'loadAIModel',
       'testAIAnalysis'
     ];
     aiActions.forEach(action => {
