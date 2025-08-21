@@ -1,9 +1,17 @@
 import { create } from 'zustand';
 import { SidePanelState } from '../types/panel-types';
+import { AIModelStatus } from '../../ai-inference/types/ai-types';
 
 export const useSidePanelStore = create<SidePanelState>((set, get) => ({
   tabDataMap: {},
   activeTabId: null,
+  // ✨ AI 모델 상태를 초기화합니다.
+  aiModelStatus: { isLoaded: false, isLoading: false },
+
+  // ✨ AI 모델 상태를 업데이트하는 함수를 구현합니다.
+  setAiModelStatus: (status: AIModelStatus) => {
+    set({ aiModelStatus: status });
+  },
 
   setAnalysisResult: (result, tabId) => {
     const currentTabId = tabId || get().activeTabId;

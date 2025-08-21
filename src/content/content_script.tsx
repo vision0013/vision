@@ -7,6 +7,7 @@ import { AnalysisResult, CrawledItem } from '@/types';
 let currentAnalysisResult: AnalysisResult | null = null;
 let dynamicObserverActive = false;
 
+
 // ✨ [개선] executeVoiceAction 함수를 processVoiceCommand 호출로 대체
 function executeVoiceAction(request: any, items: CrawledItem[]) {
   const { detectedAction, targetText, originalCommand, direction } = request;
@@ -71,14 +72,16 @@ const runCrawler = async () => {
   }
 };
 
+
 // URL 변경 감지는 Background에서 Chrome API로 처리
 
 // 크롬 메시지 리스너
-chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
+chrome.runtime.onMessage.addListener(async (request, _sender, _sendResponse) => {
   try {
     if (request.action === 'runCrawler') {
       runCrawler();
     }
+    
     
     if (request.action === 'activeElementChanged') {
       // ✨ [수정] 중앙 상태 기반 하이라이팅 처리
@@ -92,6 +95,7 @@ chrome.runtime.onMessage.addListener((request, _sender, _sendResponse) => {
         removeHighlightFromElement();
       }
     }
+    
     
     if (request.action === 'executeProcessedCommand') {
       console.log('🎯 [content] Executing:', request.detectedAction, 'target:', request.targetText, 'direction:', request.direction);
@@ -113,4 +117,5 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+// 초기화 및 크롤링 시작
 runCrawler();

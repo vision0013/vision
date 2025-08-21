@@ -20,6 +20,8 @@ export default defineConfig({
         background: resolve(__dirname, 'src/background/background.ts'),
         // 3. 콘텐츠 스크립트
         content_script: resolve(__dirname, 'src/content/content_script.tsx'),
+        // 4. 오프스크린 스크립트 (AI 추론용)
+        offscreen: resolve(__dirname, 'src/offscreen/offscreen.ts'),
       },
       output: {
         // 빌드 결과물 파일 이름을 [name].js 형식으로 만듦 (예: background.js)

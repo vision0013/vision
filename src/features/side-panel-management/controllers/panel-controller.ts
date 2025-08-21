@@ -12,6 +12,7 @@ export const useSidePanelController = () => {
     getFilteredItems,
     setFilter,
     setSearchTerm,
+    setAiModelStatus,
   } = useSidePanelStore();
 
   // ✨ [신규] 현재 활성화된 요소 상태 관리
@@ -79,6 +80,12 @@ export const useSidePanelController = () => {
           setActiveElementId(request.ownerId);
         }
       }
+// ✨ 2. AI 모델 상태 변경 메시지를 처리하는 로직을 추가합니다.
+      else if (request.action === 'aiModelStatusChanged') {
+        console.log('🔔 [panel-controller] Received AI model status update:', request.status);
+        setAiModelStatus(request.status);
+      }
+
     };
     
     chrome.runtime.onMessage.addListener(messageListener);
@@ -88,7 +95,7 @@ export const useSidePanelController = () => {
       chrome.tabs.onUpdated.removeListener(handleTabUpdated);
       chrome.runtime.onMessage.removeListener(messageListener);
     };
-  }, [setActiveTabId, setAnalysisResult, addAnalysisItems]);
+  }, [setActiveTabId, setAnalysisResult, addAnalysisItems, setAiModelStatus]);
 
   const handleItemClick = (ownerId: number) => {
     if (activeTabId) {
