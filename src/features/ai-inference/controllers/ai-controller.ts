@@ -23,8 +23,9 @@ export class AIController {
     this.fullConfig = {
       // Hugging Face의 Gated Model 경로
       modelPath: "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task?download=true",
-      maxTokens: 2048, // ✨ [최적화] MediaPipe의 권장 사항에 따라 2048로 상향 조정
-      temperature: 0.7,
+      maxTokens: 2048,
+      // ✨ [수정] 온도 값을 낮춰 분류 정확도 향상
+      temperature: 0.2,
       topK: 40,
       randomSeed: 42,
       ...config
@@ -54,17 +55,14 @@ export class AIController {
       }
       console.log(`✅ [ai-controller] Found .task file in IndexedDB. Size: ${modelTaskFile.byteLength} bytes.`);
 
-      // --- ✨ [핵심 수정] ---
-      // .task 파일(ArrayBuffer) 전체를 MediaPipe가 기대하는 Uint8Array로 직접 변환합니다.
       const modelData = new Uint8Array(modelTaskFile);
       console.log(`- Loaded .task bundle directly. Size: ${modelData.byteLength} bytes.`);
-      // --- ✨ [수정 끝] ---
 
       const wasmPath = chrome.runtime.getURL("wasm_files/");
       const genaiFileset = await FilesetResolver.forGenAiTasks(wasmPath);
       
       this.llm = await LlmInference.createFromOptions(genaiFileset, {
-        baseOptions: { modelAssetBuffer: modelData }, // .task 번들 전체를 전달합니다.
+        baseOptions: { modelAssetBuffer: modelData },
         maxTokens: this.fullConfig.maxTokens!,
         temperature: this.fullConfig.temperature!,
         topK: this.fullConfig.topK!,
@@ -158,14 +156,12 @@ export class AIController {
    * 모델 상태 확인 (IndexedDB 존재 여부 반영)
    */
   async getModelStatus(): Promise<AIModelStatus> {
-    // 메모리에 로드되지 않고 로딩중도 아닌 경우, IndexedDB 존재 여부 체크
     if (this.modelStatus.state === 1) {
       const modelExists = await this.checkModelExists();
       if (modelExists) {
-        // IndexedDB에 모델이 존재하면 상태 4(캐시있음)로 업데이트
         this.modelStatus = {
           ...this.modelStatus,
-          state: 4 // 캐시있음(로드안됨)
+          state: 4 
         };
         console.log('📦 [ai-controller] Model found in cache but not loaded in memory');
       }
@@ -187,7 +183,7 @@ export class AIController {
     try {
       const prompt = this.buildAnalysisPrompt(voiceInput);
       const response = await this.llm.generateResponse(prompt);
-      return this.parseAIResponse(response);
+      return this.parseAIResponse(response, voiceInput);
 
     } catch (error: any) {
       console.error('❌ [ai-controller] AI analysis failed:', error);
@@ -195,37 +191,86 @@ export class AIController {
     }
   }
 
+  /**
+   * ✨ [수정] 우선순위 규칙을 명시하여 분류 정확도 향상
+   */
   private buildAnalysisPrompt(voiceInput: string): string {
-    return `Analyze this Korean voice command: "${voiceInput}"
+    return `<start_of_turn>user
+You are an expert Korean voice command classifier. 
+Your task is to classify the user's intent into EXACTLY ONE of the following categories:
+["price_comparison", "purchase_flow", "simple_find", "navigation", "product_search"]
 
-Classify into one category:
-- price_comparison: price comparison requests ("최저가", "가격 비교")
-- product_search: product search ("찾아줘", "검색해줘")  
-- simple_find: find page elements ("버튼", "클릭해줘")
-- purchase_flow: purchase actions ("구매", "결제")
-- navigation: page navigation ("이전", "뒤로")
+Respond ONLY with a clean JSON object in the format:
+{"action": "category", "product": "...", "target": "...", "reasoning": "short explanation"}
 
-Respond ONLY with valid JSON:
-{"action": "category_name", "confidence": 0.9}`;
+---
+
+**Priority Rules (apply in this strict order):**
+
+1. **price_comparison** → Use ONLY if the command asks about cost: "가격", "최저가", "얼마", "할인", "싼 곳".
+
+2. **purchase_flow** → If the command involves buying/ordering/paying ("구매", "주문", "결제", "장바구니").  
+   → EVEN IF the command also includes "버튼", "클릭", or "눌러", ALWAYS classify as purchase_flow.  
+   → Example: "주문하기 클릭해줘" → {"action": "purchase_flow", "target": "주문하기"}
+
+3. **simple_find** → For finding or clicking UI elements ("버튼", "링크", "메뉴", "아이콘", "검색창").  
+   → IMPORTANT: Even if a link usually leads to navigation, classify it as simple_find if the user says "클릭" or "눌러".  
+   → Example: "회원가입 링크 클릭" → {"action": "simple_find", "target": "회원가입 링크"}
+
+4. **navigation** → Page navigation ONLY ("뒤로", "앞으로", "홈으로").  
+   → Do NOT use navigation just because of a link. Navigation must be explicitly requested.
+
+5. **product_search** → If the user wants to see/find/search a product ("노트북 보여줘", "에어팟 검색").  
+   → If the word "검색창" is used, classify as simple_find instead.
+
+---
+
+**Examples:**
+- "아이폰 15 찾아줘" → {"action": "product_search", "product": "아이폰 15", "reasoning": "User asked to search for a product"}
+- "최저가 알려줘" → {"action": "price_comparison", "reasoning": "User asked about price"}
+- "로그인 버튼 클릭해줘" → {"action": "simple_find", "target": "로그인 버튼", "reasoning": "Clicking a UI element"}
+- "회원가입 링크 클릭" → {"action": "simple_find", "target": "회원가입 링크", "reasoning": "Clicking a link is treated as UI element"}
+- "장바구니에 담아줘" → {"action": "purchase_flow", "target": "장바구니", "reasoning": "User requested to add item to cart"}
+- "결제하기 눌러줘" → {"action": "purchase_flow", "target": "결제", "reasoning": "User wants to proceed with payment"}
+- "주문하기 클릭해줘" → {"action": "purchase_flow", "target": "주문하기", "reasoning": "Order-related action takes precedence over button click"}
+- "검색창 찾아줘" → {"action": "simple_find", "target": "검색창", "reasoning": "User wants to find the search bar"}
+- "노트북 보여줘" → {"action": "product_search", "product": "노트북", "reasoning": "User wants to see a product"}
+
+---
+
+Now classify the following:
+Command: "${voiceInput}"
+Response:
+<end_of_turn>
+<start_of_turn>model`;
   }
 
-  private parseAIResponse(response: string): AIAnalysisResult {
+
+
+  /**
+   * ✨ [수정] 안정적인 파싱 로직 유지
+   */
+  private parseAIResponse(response: string, originalCommand: string): AIAnalysisResult {
     try {
       console.log('🔍 [ai-controller] Raw AI response:', response);
       
-      const jsonMatch = response.match(/\{[\s\S]*?\}/);
-      if (!jsonMatch) {
-        console.warn('⚠️ [ai-controller] No JSON found, creating fallback response');
-        // AI가 JSON을 안 만들면 텍스트 기반 추측
-        const fallbackAction = this.guessActionFromText(response);
+      const firstBrace = response.indexOf('{');
+      const lastBrace = response.lastIndexOf('}');
+      
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+        console.warn('⚠️ [ai-controller] No valid JSON object found in response, using fallback.');
+        const fallbackAction = this.guessActionFromText(originalCommand);
         const intent: VoiceIntent = {
           action: fallbackAction,
-          confidence: 0.5
+          confidence: 0.8
         };
-        return { intent, reasoning: 'Fallback analysis (non-JSON response)' };
+        return { intent, reasoning: 'Fallback analysis (No JSON found)' };
       }
       
-      const parsedResponse = JSON.parse(jsonMatch[0]);
+      const jsonString = response.substring(firstBrace, lastBrace + 1);
+      
+      const parsedResponse = JSON.parse(jsonString);
+      
       const intent: VoiceIntent = {
         action: parsedResponse.action || 'unknown',
         product: parsedResponse.product,
@@ -233,6 +278,7 @@ Respond ONLY with valid JSON:
         detail: parsedResponse.detail,
         confidence: parsedResponse.confidence || 0.8
       };
+      
       return {
         intent,
         reasoning: parsedResponse.reasoning || 'AI analysis complete',
@@ -246,16 +292,22 @@ Respond ONLY with valid JSON:
 
   private guessActionFromText(text: string): VoiceIntent['action'] {
     const lower = text.toLowerCase();
-    if (lower.includes('price') || lower.includes('최저가') || lower.includes('가격')) return 'price_comparison';
-    if (lower.includes('search') || lower.includes('찾아') || lower.includes('검색')) return 'product_search';
-    if (lower.includes('click') || lower.includes('클릭') || lower.includes('버튼')) return 'simple_find';
-    if (lower.includes('buy') || lower.includes('구매') || lower.includes('결제')) return 'purchase_flow';
-    if (lower.includes('navigate') || lower.includes('이전') || lower.includes('뒤로')) return 'navigation';
+    console.log('🔍 [ai-controller] Fallback analysis for:', lower);
+    
+    if ((lower.includes('아이폰') || lower.includes('갤럭시') || lower.includes('노트북')) && 
+        (lower.includes('찾아') || lower.includes('검색'))) {
+      return 'product_search';
+    }
+    if (lower.includes('최저가') || lower.includes('가격') || lower.includes('비교')) return 'price_comparison';
+    if (lower.includes('버튼') || lower.includes('클릭') || lower.includes('눌러')) return 'simple_find';
+    if (lower.includes('장바구니') || lower.includes('구매') || lower.includes('결제')) return 'purchase_flow';
+    if (lower.includes('이전') || lower.includes('뒤로') || lower.includes('이동')) return 'navigation';
+    if (lower.includes('찾아') || lower.includes('검색')) return 'product_search';
+    
     return 'unknown';
   }
 }
 
-// 싱글톤 인스턴스
 let aiControllerInstance: AIController | null = null;
 
 export function getAIController(): AIController {
