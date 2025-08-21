@@ -589,6 +589,59 @@ Background (Chrome Extension API) → URL 변경 감지 → Content Script (크�
 
 ## 트러블슈팅 가이드 (누적)
 
+### AI 추론 시스템 통합 문제 해결 (v4.15, 2025-08-21)
+
+#### 1. 메시지 통신 오류 문제
+**문제**: `A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received`
+
+**시도 방법 1 - 타이밍 조정**: 
+- Background → Offscreen 메시지 전달 시간 늘리기
+- 결과: **실패** - 근본적인 비동기 처리 문제 해결되지 않음
+
+**최종 해결 방법 - async 키워드 제거**: ✅
+- Offscreen의 메시지 리스너에서 `async` 키워드 제거
+- 내부 비동기 작업은 `(async () => { ... })()` 즉시 실행 함수로 처리
+- 결과: **성공** - 메시지 채널 연결 오류 완전 해결
+
+#### 2. IndexedDB 모델 상태 감지 실패
+**문제**: AI 모델이 IndexedDB에 저장되어 있지만 Panel UI에서 "No AI model found" 표시
+
+**시도 방법 1 - Panel 초기화 시 자동 검사**: 
+- AI Settings 모달 열 때마다 자동으로 모델 상태 검사
+- 결과: **실패** - Background → Offscreen → Panel 메시지 전달 타이밍 문제
+
+**시도 방법 2 - Background에서 직접 IndexedDB 접근**: 
+- Background에서 IndexedDB를 직접 체크하는 함수 추가 시도
+- 결과: **실패** - Service Worker 환경에서 IndexedDB 접근 제약
+
+**최종 해결 방법 - AI 버튼 클릭 시 검사**: ✅
+- 🤖 AI 버튼 클릭 시에만 모델 상태 검사 실행
+- Panel 즉시 열기 + 백그라운드에서 비차단 상태 검사
+- `checkModelExists()` 함수로 IndexedDB 존재 여부만 확인 (로딩하지 않음)
+- `modelExists` 필드 추가하여 3단계 UI 상태 구현
+- 결과: **성공** - 정확한 모델 상태 감지 및 UI 반영
+
+#### 3. 액션명 불일치 문제
+**문제**: Background `getAIModelStatus` ≠ Offscreen `getModelStatus` 액션명 매핑 누락
+
+**최종 해결 방법**: ✅
+- Background에서 액션명 변환 로직 추가: `getAIModelStatus` → `getModelStatus`
+- Offscreen에서 비동기 처리 적용: `await aiController.getModelStatus()`
+- 결과: **성공** - 올바른 메시지 라우팅 및 응답 처리
+
+#### 4. Zustand 전역 상태 관리 문제
+**문제**: Panel 닫고 다시 열 때 AI 모델 상태 초기화됨
+
+**시도 방법 - React 로컬 상태 유지**: 
+- useState로 모델 상태 관리 시도
+- 결과: **실패** - Panel 재오픈 시 상태 손실
+
+**최종 해결 방법 - Zustand 전역 상태**: ✅
+- `useSidePanelStore`에 `aiModelStatus`, `setAiModelStatus` 추가
+- Panel UI에서 전역 상태 사용으로 변경
+- Background에서 Zustand 상태 업데이트 연동
+- 결과: **성공** - Panel 재오픈 시에도 상태 지속성 보장
+
 ### 동적 관찰자 모듈 분리 문제 해결 (v4.14, 2025-01-19)
 
 #### 1. 높은 결합도 문제
