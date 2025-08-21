@@ -5,8 +5,7 @@ import { VoiceIntent, AIAnalysisResult, AIModelConfig, AIModelStatus } from '../
 export class ContentAIController {
   private llm: any | null = null; // LlmInference 타입 - 동적 import를 위해 any로 변경
   private modelStatus: AIModelStatus = {
-    isLoaded: false,
-    isLoading: false
+    state: 1 // 캐시없음/로딩안됨
   };
 
   private readonly config: AIModelConfig = {
@@ -21,18 +20,18 @@ export class ContentAIController {
    * Content Script에서 MediaPipe LLM 초기화 (동적 import 사용)
    */
   async initialize(): Promise<boolean> {
-    if (this.modelStatus.isLoaded) {
+    if (this.modelStatus.state === 3) {
       console.log('🤖 [content-ai] Model already loaded');
       return true;
     }
 
-    if (this.modelStatus.isLoading) {
+    if (this.modelStatus.state === 2) {
       console.log('🔄 [content-ai] Model is already loading...');
       return false;
     }
 
     try {
-      this.modelStatus.isLoading = true;
+      this.modelStatus.state = 2; // 로딩 중
       const startTime = Date.now();
       console.log('🚀 [content-ai] Starting AI model initialization in Content Script...');
       console.log('📦 [content-ai] Model path:', this.config.modelPath);
@@ -65,8 +64,7 @@ export class ContentAIController {
 
       const loadTime = Date.now() - startTime;
       this.modelStatus = {
-        isLoaded: true,
-        isLoading: false,
+        state: 3, // 로딩 완료
         modelSize: 529 * 1024 * 1024, // 529MB
         loadTime: loadTime
       };
@@ -78,8 +76,7 @@ export class ContentAIController {
     } catch (error: any) {
       const loadTime = Date.now();
       this.modelStatus = {
-        isLoaded: false,
-        isLoading: false,
+        state: 1, // 캐시없음/실패
         error: error.message,
         loadTime: loadTime
       };
@@ -96,7 +93,7 @@ export class ContentAIController {
   async analyzeIntent(voiceInput: string): Promise<AIAnalysisResult> {
     console.log('🎯 [content-ai] Analyzing voice intent with Gemma-3 1B:', voiceInput);
 
-    if (!this.modelStatus.isLoaded || !this.llm) {
+    if (this.modelStatus.state !== 3 || !this.llm) {
       console.log('⚠️ [content-ai] Model not loaded');
       throw new Error('AI model not loaded');
     }
@@ -190,8 +187,7 @@ JSON 형식으로만 응답해주세요:
     }
     
     this.modelStatus = {
-      isLoaded: false,
-      isLoading: false
+      state: 1 // 캐시없음
     };
     
     console.log('🗑️ [content-ai] AI model disposed');

@@ -13,7 +13,7 @@ interface AISettingsProps {
 }
 
 export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
-  const { aiModelStatus, setAiModelStatus } = useSidePanelStore();
+  const { aiModelStatus, setAiModelStatus, setAiError, clearAiError } = useSidePanelStore();
   const [hfToken, setHfToken] = useState('');
 
   useEffect(() => {
@@ -25,7 +25,9 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
       });
 
       const messageListener = (message: any) => {
+        console.log('🔄 [ai-settings] Received message:', message.action, JSON.stringify(message, null, 2));
         if (['modelStatusResponse', 'modelLoaded', 'modelDeleted', 'aiInitialized'].includes(message.action)) {
+            console.log('📊 [ai-settings] Updating AI model status:', JSON.stringify(message.status, null, 2));
             setAiModelStatus(message.status);
         }
       };
@@ -40,28 +42,31 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
       alert('Please enter a Hugging Face API token.');
       return;
     }
-    setAiModelStatus({ ...aiModelStatus, isLoading: true, error: undefined });
     
-    await chrome.storage.local.set({ hfToken });
-    console.log(' M [settings-ui] Token saved.');
+    clearAiError();
+    setAiModelStatus({ state: 2, error: undefined }); // 로딩 중
+    
+    try {
+      await chrome.storage.local.set({ hfToken });
+      console.log(' M [settings-ui] Token saved.');
 
-    chrome.runtime.sendMessage({ 
-      action: 'downloadAIModel', 
-      token: hfToken
-    });
+      chrome.runtime.sendMessage({ 
+        action: 'downloadAIModel', 
+        token: hfToken
+      });
+    } catch (error) {
+      setAiError(error);
+    }
   };
 
   const loadModel = async () => {
-    setAiModelStatus({ ...aiModelStatus, isLoading: true, error: undefined });
+    clearAiError();
+    console.log('🔄 [loadModel] Current state before update:', JSON.stringify(aiModelStatus, null, 2));
+    setAiModelStatus({ state: 2, error: undefined }); // 2: 로딩중
+    console.log('🔄 [loadModel] Setting state to 2 (loading)');
     
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'initializeAI' });
-      if (response && response.success) {
-        console.log('✅ Model loaded successfully');
-      }
-    } catch (error) {
-      console.error('❌ Model loading failed:', error);
-    }
+    // 메시지만 보내고 모든 상태 업데이트는 메시지 리스너에서 처리
+    chrome.runtime.sendMessage({ action: 'initializeAI' });
   };
 
   const deleteModel = async () => {
@@ -70,6 +75,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         await chrome.runtime.sendMessage({ action: 'deleteAIModel' });
       } catch (error) {
         console.error('❌ Model deletion failed:', error);
+        setAiError(error);
       }
     }
   };
@@ -95,13 +101,19 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div className="model-status">
-            {aiModelStatus.isLoading && (
+            {aiModelStatus.state === 1 && (
+              <div style={{color: '#6c757d', marginBottom: '15px'}}>
+                🤖 No AI model found. Please download the model first.
+              </div>
+            )}
+            
+            {aiModelStatus.state === 2 && (
               <div style={{color: '#007bff', marginBottom: '15px'}}>
                 ⏳ Loading model... {aiModelStatus.loadTime && `(${Math.floor(aiModelStatus.loadTime / 1000)}s)`}
               </div>
             )}
             
-            {aiModelStatus.isLoaded && (
+            {aiModelStatus.state === 3 && (
               <div style={{color: '#28a745', marginBottom: '15px'}}>
                 ✅ Model loaded in memory! 
                 {aiModelStatus.modelSize && ` (${(aiModelStatus.modelSize / 1024 / 1024).toFixed(1)}MB)`}
@@ -109,7 +121,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
               </div>
             )}
             
-            {!aiModelStatus.isLoaded && aiModelStatus.modelExists && (
+            {aiModelStatus.state === 4 && (
               <div style={{color: '#ffc107', marginBottom: '15px'}}>
                 📦 Model found in cache but not loaded. Click "Load Model" to use AI features.
               </div>
@@ -118,12 +130,6 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
             {aiModelStatus.error && (
               <div style={{color: '#dc3545', marginBottom: '15px'}}>
                 ❌ Error: {aiModelStatus.error}
-              </div>
-            )}
-            
-            {!aiModelStatus.isLoaded && !aiModelStatus.isLoading && !aiModelStatus.modelExists && !aiModelStatus.error && (
-              <div style={{color: '#6c757d', marginBottom: '15px'}}>
-                🤖 No AI model found. Please download the model first.
               </div>
             )}
           </div>
@@ -142,32 +148,32 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div className="model-actions">
-            {!aiModelStatus.isLoaded && !aiModelStatus.modelExists && (
+            {aiModelStatus.state === 1 && (
               <button 
                 className="btn btn-primary download-btn"
                 onClick={handleSaveAndDownload}
-                disabled={aiModelStatus.isLoading}
+                disabled={false}
               >
-                {aiModelStatus.isLoading ? '⏳ Downloading...' : `Save Token & Download Model (${MODEL_INFO.size})`}
+                {`Save Token & Download Model (${MODEL_INFO.size})`}
               </button>
             )}
             
-            {!aiModelStatus.isLoaded && aiModelStatus.modelExists && (
+            {aiModelStatus.state === 4 && (
               <button 
                 className="btn btn-success"
                 onClick={loadModel}
-                disabled={aiModelStatus.isLoading}
+                disabled={false}
               >
-                {aiModelStatus.isLoading ? '⏳ Loading...' : '🚀 Load Model from Cache'}
+                🚀 Load Model from Cache
               </button>
             )}
             
-            {(aiModelStatus.isLoaded || aiModelStatus.modelExists) && (
+            {(aiModelStatus.state === 3 || aiModelStatus.state === 4) && (
               <button 
                 className="btn btn-secondary delete-btn"
                 onClick={deleteModel}
-                disabled={aiModelStatus.isLoading}
-                style={{marginLeft: aiModelStatus.isLoaded ? '0' : '10px'}}
+                disabled={false}
+                style={{marginLeft: aiModelStatus.state === 3 ? '0' : '10px'}}
               >
                 🗑️ Delete Model
               </button>

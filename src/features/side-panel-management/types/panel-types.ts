@@ -16,6 +16,8 @@ export interface SidePanelState {
   // ✨ AI 모델 상태와 상태 변경 함수 타입을 추가합니다.
   aiModelStatus: AIModelStatus;
   setAiModelStatus: (status: AIModelStatus) => void;
+  setAiError: (error: unknown) => void;
+  clearAiError: () => void;
 
   setAnalysisResult: (result: AnalysisResult, tabId?: number) => void;
   addAnalysisItems: (newItems: CrawledItem[], tabId?: number) => void;

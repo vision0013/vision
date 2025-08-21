@@ -14,8 +14,7 @@ const DB_VERSION = 2;
 export class AIController {
   private llm: LlmInference | null = null;
   private modelStatus: AIModelStatus = {
-    isLoaded: false,
-    isLoading: false
+    state: 1 // 1: 캐시없음/로딩안됨
   };
 
   private readonly fullConfig: AIModelConfig;
@@ -37,11 +36,11 @@ export class AIController {
    * MediaPipe LLM 초기화 (로컬 캐시 우선)
    */
   async initialize(): Promise<boolean> {
-    if (this.modelStatus.isLoaded) return true;
-    if (this.modelStatus.isLoading) return false;
+    if (this.modelStatus.state === 3) return true; // 이미 로드됨
+    if (this.modelStatus.state === 2) return false; // 로딩 중
 
     try {
-      this.modelStatus.isLoading = true;
+      this.modelStatus.state = 2; // 로딩 중
       const startTime = Date.now();
       console.log('🚀 [ai-controller] Initializing AI model from local cache...');
 
@@ -50,7 +49,7 @@ export class AIController {
 
       if (!modelTaskFile || typeof modelTaskFile.byteLength === 'undefined') {
         console.error('❌ [ai-controller] No model task file found in cache. Please download the model.');
-        this.modelStatus = { isLoaded: false, isLoading: false, error: 'Model not found in cache.' };
+        this.modelStatus = { state: 1, error: 'Model not found in cache.' };
         return false;
       }
       console.log(`✅ [ai-controller] Found .task file in IndexedDB. Size: ${modelTaskFile.byteLength} bytes.`);
@@ -74,8 +73,7 @@ export class AIController {
 
       const loadTime = Date.now() - startTime;
       this.modelStatus = {
-        isLoaded: true,
-        isLoading: false,
+        state: 3, // 로딩 완료
         modelSize: modelData.byteLength,
         loadTime: loadTime
       };
@@ -84,11 +82,9 @@ export class AIController {
       return true;
 
     } catch (error: any) {
-      this.modelStatus = { isLoaded: false, isLoading: false, error: error.message };
+      this.modelStatus = { state: 1, error: error.message };
       console.error('❌ [ai-controller] FAILED to initialize from cache:', error);
       return false;
-    } finally {
-      this.modelStatus.isLoading = false;
     }
   }
 
@@ -97,7 +93,7 @@ export class AIController {
    */
   async downloadAndCacheModel(token: string): Promise<boolean> {
     console.log('📥 [ai-controller] Downloading model from Hugging Face with API token...');
-    this.modelStatus = { isLoaded: false, isLoading: true };
+    this.modelStatus = { state: 2 }; // 로딩 중
     try {
       const response = await fetch(this.fullConfig.modelPath!, {
         headers: {
@@ -122,13 +118,11 @@ export class AIController {
       await db.put(MODEL_STORE_NAME, modelBuffer, MODEL_KEY);
       console.log('💾 [ai-controller] Model saved to IndexedDB.');
       
-      this.modelStatus.isLoading = false; 
-      
       return this.initialize();
   
     } catch (error: any) {
       console.error('❌ [ai-controller] Failed to download or cache model:', error);
-      this.modelStatus = { isLoaded: false, isLoading: false, error: error.message };
+      this.modelStatus = { state: 1, error: error.message };
       return false;
     }
   }
@@ -140,7 +134,7 @@ export class AIController {
     const db = await openDB(DB_NAME, DB_VERSION);
     await db.delete(MODEL_STORE_NAME, MODEL_KEY);
     if (this.llm) this.llm = null;
-    this.modelStatus = { isLoaded: false, isLoading: false };
+    this.modelStatus = { state: 1 }; // 캐시 없음
     console.log('✅ [ai-controller] Cached model deleted.');
   }
 
@@ -164,15 +158,14 @@ export class AIController {
    * 모델 상태 확인 (IndexedDB 존재 여부 반영)
    */
   async getModelStatus(): Promise<AIModelStatus> {
-    // 메모리에 로드되지 않았지만 IndexedDB에 존재하는 경우
-    if (!this.modelStatus.isLoaded && !this.modelStatus.isLoading) {
+    // 메모리에 로드되지 않고 로딩중도 아닌 경우, IndexedDB 존재 여부 체크
+    if (this.modelStatus.state === 1) {
       const modelExists = await this.checkModelExists();
       if (modelExists) {
-        // IndexedDB에 모델이 존재하면 상태를 업데이트 (로딩은 하지 않음)
+        // IndexedDB에 모델이 존재하면 상태 4(캐시있음)로 업데이트
         this.modelStatus = {
           ...this.modelStatus,
-          isLoaded: false, // 메모리에는 로드되지 않음
-          modelExists: true // 새로운 필드로 존재 여부 표시
+          state: 4 // 캐시있음(로드안됨)
         };
         console.log('📦 [ai-controller] Model found in cache but not loaded in memory');
       }
@@ -186,7 +179,7 @@ export class AIController {
   async analyzeIntent(voiceInput: string): Promise<AIAnalysisResult> {
     console.log('🎯 [ai-controller] Analyzing voice intent with Gemma 3 1B:', voiceInput);
 
-    if (!this.modelStatus.isLoaded || !this.llm) {
+    if (this.modelStatus.state !== 3 || !this.llm) {
       console.log('⚠️ [ai-controller] Model not loaded, using fallback analysis');
       throw new Error('AI model is not initialized.');
     }

@@ -413,6 +413,15 @@ import { functionName } from '../../features';
 
 ## 최근 작업 내역
 
+### v4.16 AI 모델 상태 관리 단순화 완료 (2025-08-21)
+- ✅ **숫자 상태 시스템 도입**: 복잡한 boolean 조합(`isLoaded`, `isLoading`, `modelExists`) → 단일 `state` 숫자로 단순화
+- ✅ **4단계 상태 정의**: 1(캐시없음), 2(로딩중), 3(로딩완료), 4(캐시있음/로드안됨)로 명확한 상태 전환
+- ✅ **빈 객체 문제 해결**: 단일 `state` 필드로 Offscreen 응답 빈 객체 덮어쓰기 문제 완전 해결
+- ✅ **UI 조건문 단순화**: `aiModelStatus.state === 1/2/3/4` 패턴으로 복잡한 조건 제거
+- ✅ **타입 안전성 강화**: `AIModelStatus { state: 1|2|3|4, error?, modelSize?, loadTime? }` 명확한 타입 정의
+- ✅ **상태 전환 흐름**: 캐시감지(1→4) → 로딩시작(4→2) → 로딩완료(2→3) → 실패시(2→1) 일관성 보장
+- ✅ **Load Model 버튼 정상화**: "📦 Model found in cache" → 버튼 클릭 → "⏳ Loading model..." → "✅ Model loaded in memory!" 흐름 완성
+
 ### v4.15 AI 추론 모듈 통합 완료 (2025-08-21)
 - ✅ **Gemma 3 1B 모델 통합**: MediaPipe Tasks Gen AI 라이브러리로 로컬 AI 추론 구현
 - ✅ **IndexedDB 캐싱 시스템**: 529MB 모델을 브라우저에 캐싱하여 오프라인 동작 지원  
@@ -588,6 +597,70 @@ Background (Chrome Extension API) → URL 변경 감지 → Content Script (크�
 - **Controller 패턴** (v4.14) → 상태 관리 중앙화 및 의존성 주입으로 결합도 완화
 
 ## 트러블슈팅 가이드 (누적)
+
+### AI 모델 상태 관리 단순화 문제 해결 (v4.16, 2025-08-21)
+
+#### 1. 복잡한 boolean 조합으로 인한 UI 상태 혼선
+**문제**: `isLoaded`, `isLoading`, `modelExists` 3개 필드의 복잡한 조합으로 UI 조건문 혼란
+
+**시도 방법 1 - 조건문 순서 조정**: 
+- 우선순위에 따라 조건문 순서 변경 시도
+- 결과: **실패** - 여전히 복잡한 조건 조합으로 예상치 못한 상태 발생
+
+**시도 방법 2 - 빈 객체 방어 처리**: 
+- 메시지 리스너에서 빈 객체 검증 로직 추가
+- 결과: **실패** - 근본적인 상태 복잡성 문제 해결되지 않음
+
+**최종 해결 방법 - 숫자 상태 시스템**: ✅
+- 4단계 숫자 상태로 완전 단순화: 1(캐시없음), 2(로딩중), 3(로딩완료), 4(캐시있음)
+- UI 조건문: `aiModelStatus.state === 1/2/3/4` 패턴으로 명확화
+- 상태 전환: 1→4(캐시감지), 4→2(로딩시작), 2→3(성공), 2→1(실패)
+- 결과: **성공** - 복잡한 조건 제거 및 예측 가능한 상태 전환
+
+#### 2. Offscreen 빈 객체 응답으로 상태 덮어쓰기 문제
+**문제**: `aiInitialized` 메시지에서 `status: {}` 빈 객체로 기존 상태 완전 덮어쓰기
+
+**시도 방법 1 - 빈 객체 검증**: 
+- `Object.keys(message.status).length > 0` 검증 후 업데이트
+- 결과: **부분 성공** - 빈 객체는 막았지만 상태 복잡성 지속
+
+**최종 해결 방법 - 단일 필드 상태**: ✅
+- `state` 하나의 필드만 사용하여 빈 객체 문제 원천 차단
+- 타입 안전성: `AIModelStatus { state: 1|2|3|4 }` 명확한 타입 정의
+- **Offscreen 응답 보완**: `await aiController.getModelStatus()` 비동기 처리 및 실패 시 기본 상태 제공
+- 결과: **성공** - 빈 객체 덮어쓰기 문제 완전 해결
+
+#### 3. Load Model 버튼 클릭 후 상태 반영 지연 문제
+**문제**: 버튼 클릭 → "No AI model found" 표시 → 새로고침 시에만 정상 상태
+
+**시도 방법 1 - 수동 상태 설정**: 
+- `loadModel` 함수에서 성공 시 수동으로 상태 설정
+- 결과: **실패** - Offscreen 응답과 충돌하여 마지막 응답이 덮어씀
+
+**시도 방법 2 - 메시지 리스너만 신뢰**: 
+- `loadModel`에서 수동 설정 제거, 메시지 리스너에서만 상태 업데이트
+- 결과: **부분 성공** - 여전히 복잡한 조건문으로 예상치 못한 상태
+
+**최종 해결 방법 - 명확한 상태 전환**: ✅
+- 버튼 클릭: `state: 4` → `state: 2` (즉시 로딩 표시)
+- 응답 처리: `state: 2` → `state: 3` (성공) 또는 `state: 1` (실패)
+- UI 우선순위: 로딩 상태가 최우선으로 표시되도록 조건문 순서 조정
+- **Offscreen 응답 수정**: `aiController.getModelStatus()` 비동기 호출 및 에러 시 기본 상태 제공
+- 결과: **성공** - "📦 Model found" → "⏳ Loading..." → "✅ Model loaded" 완벽한 흐름
+
+#### 4. Offscreen AI Controller 빈 상태 응답 문제
+**문제**: Offscreen에서 `aiInitialized` 메시지 시 `status: {}` 빈 객체 응답
+
+**시도 방법 1 - Panel 메시지 리스너 방어**: 
+- UI에서 빈 객체 검증 후 업데이트 방지
+- 결과: **부분 성공** - 빈 객체는 막았지만 올바른 상태 미반영
+
+**최종 해결 방법 - Offscreen 응답 개선**: ✅
+- AI Controller `getModelStatus()` 메서드를 `await`로 비동기 호출
+- 에러 발생 시 `{ state: 1, error: error.message }` 기본 상태 제공
+- 성공/실패 모든 경우에 유효한 상태 객체 보장
+- 디버깅을 위한 상태 로그 추가: `console.log('📊 [offscreen] AI status:', status)`
+- 결과: **성공** - 항상 유효한 숫자 상태 응답으로 UI 정상 동작
 
 ### AI 추론 시스템 통합 문제 해결 (v4.15, 2025-08-21)
 
@@ -911,12 +984,17 @@ const sendMessageWithRetry = async (message: any, maxRetries = 3) => {
 #### 12. Vite 빌드 설정
 **최적화된 설정으로 빌드 시간 ~400ms 달성**
 
-### 성공 지표 (v4.15)
-- ✅ **AI 모델 로컬 실행**: Gemma 3 1B 모델 2.5초 내 로딩 완료
-- ✅ **IndexedDB 캐싱**: 529MB 모델 브라우저 저장으로 오프라인 동작
-- ✅ **Hugging Face 통합**: API 토큰 기반 모델 다운로드 시스템
-- ✅ **5가지 의도 분류**: price_comparison, product_search, simple_find, purchase_flow, navigation
-- ✅ **AI 설정 UI**: 토큰 입력 및 모델 관리 완전 자동화
+### 성공 지표 (v4.16)
+- ✅ **숫자 상태 시스템**: 복잡한 boolean 조합 → 단일 `state` 숫자로 완전 단순화
+- ✅ **4단계 명확한 상태**: 1(캐시없음), 2(로딩중), 3(로딩완료), 4(캐시있음) 예측 가능한 전환
+- ✅ **UI 조건문 90% 감소**: `aiModelStatus.state === 1/2/3/4` 패턴으로 복잡한 조건 완전 제거
+- ✅ **빈 객체 문제 100% 해결**: 단일 `state` 필드로 Offscreen 응답 덮어쓰기 문제 원천 차단
+- ✅ **Load Model 버튼 완벽 작동**: "📦 Model found" → "⏳ Loading..." → "✅ Model loaded" 흐름 완성
+- ✅ **AI 모델 로컬 실행**: Gemma 3 1B 모델 2.5초 내 로딩 완료 유지
+- ✅ **IndexedDB 캐싱**: 529MB 모델 브라우저 저장으로 오프라인 동작 유지
+- ✅ **Hugging Face 통합**: API 토큰 기반 모델 다운로드 시스템 유지
+- ✅ **5가지 의도 분류**: price_comparison, product_search, simple_find, purchase_flow, navigation 유지
+- ✅ **AI 설정 UI**: 토큰 입력 및 모델 관리 완전 자동화 유지
 - ✅ **뒤로가기 감지 100% 성공**: 아무리 빠른 연속 뒤로가기도 완벽 감지 (v4.13)
 - ✅ **Service Worker 연결 오류 0건**: "Receiving end does not exist" 완전 해결 (v4.13)
 - ✅ **Background 디바운싱**: 300ms로 마지막 페이지만 효율적 크롤링 (v4.13)

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chrome Extension Crawler",
-  "version": "4.13.0",
+  "version": "4.16.0",
   "description": "A Chrome extension to crawl and analyze web pages with voice commands.",
   "permissions": [
     "sidePanel",

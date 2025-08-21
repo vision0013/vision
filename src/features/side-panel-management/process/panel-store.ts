@@ -2,15 +2,54 @@ import { create } from 'zustand';
 import { SidePanelState } from '../types/panel-types';
 import { AIModelStatus } from '../../ai-inference/types/ai-types';
 
+/**
+ * 안전하게 에러 메시지를 추출하는 타입 가드
+ */
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const msg = (error as any).message;
+    return typeof msg === 'string' ? msg : 'Unknown error';
+  }
+  return 'An unexpected error occurred';
+};
+
 export const useSidePanelStore = create<SidePanelState>((set, get) => ({
   tabDataMap: {},
   activeTabId: null,
   // ✨ AI 모델 상태를 초기화합니다.
-  aiModelStatus: { isLoaded: false, isLoading: false },
+  aiModelStatus: { state: 1 }, // 1: 캐시없음/로딩안됨
 
   // ✨ AI 모델 상태를 업데이트하는 함수를 구현합니다.
   setAiModelStatus: (status: AIModelStatus) => {
     set({ aiModelStatus: status });
+  },
+
+  // ✨ 안전한 에러 처리 액션
+  setAiError: (error: unknown) => {
+    const errorMessage = getErrorMessage(error);
+    set(state => ({ 
+      aiModelStatus: { 
+        ...state.aiModelStatus, 
+        error: errorMessage,
+        state: state.aiModelStatus.state === 2 ? 1 : state.aiModelStatus.state // 로딩 중이었다면 캐시없음으로
+      } 
+    }));
+  },
+
+  // ✨ 에러 클리어 액션
+  clearAiError: () => {
+    set(state => ({ 
+      aiModelStatus: { 
+        ...state.aiModelStatus, 
+        error: undefined 
+      } 
+    }));
   },
 
   setAnalysisResult: (result, tabId) => {

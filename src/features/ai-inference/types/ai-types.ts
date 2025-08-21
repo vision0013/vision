@@ -24,9 +24,7 @@ export interface AIModelConfig {
 }
 
 export interface AIModelStatus {
-  isLoaded: boolean;
-  isLoading: boolean;
-  modelExists?: boolean; // IndexedDB에 모델이 존재하는지 여부
+  state: 1 | 2 | 3 | 4; // 1: 캐시없음, 2: 로딩중, 3: 로딩완료, 4: 캐시있음(로드안됨)
   error?: string;
   modelSize?: number;
   loadTime?: number;

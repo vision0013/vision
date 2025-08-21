@@ -21,16 +21,20 @@ async function initializeOffscreen() {
             try {
               console.log('🚀 [offscreen] Initializing AI model from local cache...');
               const success = await aiController.initialize();
+              const status = await aiController.getModelStatus();
+              console.log('📊 [offscreen] AI status after initialize:', status);
               chrome.runtime.sendMessage({
                 action: 'aiInitialized',
                 success: success,
-                status: aiController.getModelStatus()
+                status: status
               });
             } catch (error: any) {
+              console.error('❌ [offscreen] Initialize error:', error);
               chrome.runtime.sendMessage({
                 action: 'aiInitialized',
                 success: false,
-                error: error.message
+                error: error.message,
+                status: { state: 1, error: error.message }
               });
             }
           })();

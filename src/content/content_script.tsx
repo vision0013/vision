@@ -1,6 +1,6 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
-import { processVoiceCommand } from '../features/voice-commands'; // ✨ [개선] processVoiceCommand만 import
+import { processVoiceCommand } from '../features/voice-commands';
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
 import { AnalysisResult, CrawledItem } from '@/types';
 
