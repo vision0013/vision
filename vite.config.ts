@@ -17,7 +17,7 @@ export default defineConfig({
         // 1. 사이드 패널 UI (프로젝트 루트의 index.html을 가리킴)
         main: resolve(__dirname, 'index.html'),
         // 2. 백그라운드 스크립트
-        background: resolve(__dirname, 'src/background/background.ts'),
+        background: resolve(__dirname, 'src/background/controllers/background-controller.ts'),
         // 3. 콘텐츠 스크립트
         content_script: resolve(__dirname, 'src/content/content_script.tsx'),
         // 4. 오프스크린 스크립트 (AI 추론용)

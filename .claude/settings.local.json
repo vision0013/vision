@@ -5,7 +5,8 @@
       "Bash(mkdir:*)",
       "Bash(rm:*)",
       "Bash(cp:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []
