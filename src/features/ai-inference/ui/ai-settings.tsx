@@ -3,9 +3,9 @@ import { useSidePanelStore } from '../../side-panel-management/process/panel-sto
 import { AI_TEST_CASES, AITestResult, AITestSummary } from '../config/test-cases';
 
 const MODEL_INFO = {
-  name: "Gemma 3 1B Model",
-  size: "~529 MB",
-  repoUrl: "https://huggingface.co/litert-community/Gemma3-1B-IT"
+  name: "Gemma 3 4B Model",
+  size: "~2.56 GB",
+  repoUrl: "https://huggingface.co/litert-community/Gemma3-4B-IT"
 };
 
 interface AISettingsProps {

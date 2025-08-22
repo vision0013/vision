@@ -71,7 +71,8 @@ async function initializeOffscreen() {
                 throw new Error("API token is missing.");
               }
               console.log('📥 [offscreen] Starting AI model download with token...');
-              const success = await aiController.downloadAndCacheModel(message.token);
+              // 방법 1: modelAssetPath 시도, 실패시 자동으로 다운로드 방식으로 폴백
+              const success = await aiController.downloadAndCacheModelAsPath(message.token);
               const status = aiController.getModelStatus();
               // ai-settings.tsx의 리스너와 맞추기 위해 'modelLoaded'를 사용합니다.
               chrome.runtime.sendMessage({

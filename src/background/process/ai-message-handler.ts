@@ -71,12 +71,13 @@ export async function handleAIMessage(
       };
       chrome.runtime.onMessage.addListener(listener);
       
-      // 30초 타임아웃 (타이머 ID 저장)
+      // 다운로드는 12분, 기타 작업은 30초 타임아웃
+      const timeoutDuration = request.action === 'downloadAIModel' ? 12 * 60 * 1000 : 30000;
       timeoutId = setTimeout(() => {
         chrome.runtime.onMessage.removeListener(listener);
         console.error(`⏰ [ai-handler] Timeout waiting for ${expectedResponse} with ID: ${requestId}`);
         resolve({ error: 'AI operation timeout' });
-      }, 30000);
+      }, timeoutDuration);
     });
     
     return response;
