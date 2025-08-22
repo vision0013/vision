@@ -194,101 +194,113 @@ export class AIController {
   /**
    * ✨ [수정] 우선순위 규칙을 명시하여 분류 정확도 향상
    */
-  private buildAnalysisPrompt(voiceInput: string): string {
-    return `<start_of_turn>user
+private buildAnalysisPrompt(voiceInput: string): string {
+  return `<start_of_turn>user
 You are an expert Korean voice command classifier. 
-Your task is to classify the user's intent into EXACTLY ONE of the following categories:
-["price_comparison", "purchase_flow", "simple_find", "navigation", "product_search"]
+Classify into ONE category: ["price_comparison", "purchase_flow", "simple_find", "navigation", "product_search"]
 
-Respond ONLY with a clean JSON object in the format:
-{"action": "category", "product": "...", "target": "...", "reasoning": "short explanation"}
+Respond with JSON:
+{"action": "category", "product": "...", "target": "...", "confidence": 0.95, "reasoning": "explanation"}
 
----
+Rules (STRICT ORDER):
+1. **price_comparison**: 가격/할인 관련 ("최저가", "할인가", "얼마", "싼 곳")
+2. **purchase_flow**: 구매/주문 ("장바구니", "결제", "주문", "구매", "카트")  
+3. **simple_find**: UI 조작 ("버튼", "링크", "메뉴", "아이콘", "검색창" + "클릭/눌러/찾아")
+4. **navigation**: 페이지 이동 ("뒤로", "앞으로", "홈으로", "이전 페이지")
+5. **product_search**: 상품 검색 (제품명 + "찾아/검색/보여")
 
-**Priority Rules (apply in this strict order):**
+Examples:
+- "검색창 찾아줘" → {"action": "simple_find", "target": "검색창", "confidence": 0.90}
+- "메뉴 버튼 눌러줘" → {"action": "simple_find", "target": "메뉴 버튼", "confidence": 0.88}
+- "카트에 추가해줘" → {"action": "purchase_flow", "target": "카트", "confidence": 0.92}
+- "아이폰 찾아줘" → {"action": "product_search", "product": "아이폰", "confidence": 0.95}
 
-1. **price_comparison** → Use ONLY if the command asks about cost: "가격", "최저가", "얼마", "할인", "싼 곳".
-
-2. **purchase_flow** → If the command involves buying/ordering/paying ("구매", "주문", "결제", "장바구니").  
-   → EVEN IF the command also includes "버튼", "클릭", or "눌러", ALWAYS classify as purchase_flow.  
-   → Example: "주문하기 클릭해줘" → {"action": "purchase_flow", "target": "주문하기"}
-
-3. **simple_find** → For finding or clicking UI elements ("버튼", "링크", "메뉴", "아이콘", "검색창").  
-   → IMPORTANT: Even if a link usually leads to navigation, classify it as simple_find if the user says "클릭" or "눌러".  
-   → Example: "회원가입 링크 클릭" → {"action": "simple_find", "target": "회원가입 링크"}
-
-4. **navigation** → Page navigation ONLY ("뒤로", "앞으로", "홈으로").  
-   → Do NOT use navigation just because of a link. Navigation must be explicitly requested.
-
-5. **product_search** → If the user wants to see/find/search a product ("노트북 보여줘", "에어팟 검색").  
-   → If the word "검색창" is used, classify as simple_find instead.
-
----
-
-**Examples:**
-- "아이폰 15 찾아줘" → {"action": "product_search", "product": "아이폰 15", "reasoning": "User asked to search for a product"}
-- "최저가 알려줘" → {"action": "price_comparison", "reasoning": "User asked about price"}
-- "로그인 버튼 클릭해줘" → {"action": "simple_find", "target": "로그인 버튼", "reasoning": "Clicking a UI element"}
-- "회원가입 링크 클릭" → {"action": "simple_find", "target": "회원가입 링크", "reasoning": "Clicking a link is treated as UI element"}
-- "장바구니에 담아줘" → {"action": "purchase_flow", "target": "장바구니", "reasoning": "User requested to add item to cart"}
-- "결제하기 눌러줘" → {"action": "purchase_flow", "target": "결제", "reasoning": "User wants to proceed with payment"}
-- "주문하기 클릭해줘" → {"action": "purchase_flow", "target": "주문하기", "reasoning": "Order-related action takes precedence over button click"}
-- "검색창 찾아줘" → {"action": "simple_find", "target": "검색창", "reasoning": "User wants to find the search bar"}
-- "노트북 보여줘" → {"action": "product_search", "product": "노트북", "reasoning": "User wants to see a product"}
-
----
-
-Now classify the following:
 Command: "${voiceInput}"
-Response:
 <end_of_turn>
 <start_of_turn>model`;
-  }
+}
 
 
 
   /**
    * ✨ [수정] 안정적인 파싱 로직 유지
    */
-  private parseAIResponse(response: string, originalCommand: string): AIAnalysisResult {
-    try {
-      console.log('🔍 [ai-controller] Raw AI response:', response);
-      
-      const firstBrace = response.indexOf('{');
-      const lastBrace = response.lastIndexOf('}');
-      
-      if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-        console.warn('⚠️ [ai-controller] No valid JSON object found in response, using fallback.');
-        const fallbackAction = this.guessActionFromText(originalCommand);
-        const intent: VoiceIntent = {
-          action: fallbackAction,
-          confidence: 0.8
-        };
-        return { intent, reasoning: 'Fallback analysis (No JSON found)' };
-      }
-      
-      const jsonString = response.substring(firstBrace, lastBrace + 1);
-      
-      const parsedResponse = JSON.parse(jsonString);
-      
+private parseAIResponse(response: string, originalCommand: string): AIAnalysisResult {
+  try {
+    console.log('🔍 [ai-controller] Raw AI response:', response);
+    
+    const firstBrace = response.indexOf('{');
+    const lastBrace = response.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+      console.warn('⚠️ [ai-controller] No valid JSON object found in response, using fallback.');
+      const fallbackAction = this.guessActionFromText(originalCommand);
       const intent: VoiceIntent = {
-        action: parsedResponse.action || 'unknown',
-        product: parsedResponse.product,
-        target: parsedResponse.target,
-        detail: parsedResponse.detail,
-        confidence: parsedResponse.confidence || 0.8
+        action: fallbackAction,
+        confidence: 0.8,
+        reasoning: 'Fallback analysis (No JSON found)'
       };
-      
-      return {
-        intent,
-        reasoning: parsedResponse.reasoning || 'AI analysis complete',
-      };
-    } catch (error: any) {
-      console.error('❌ [ai-controller] Failed to parse AI response:', error);
-      console.error('❌ [ai-controller] Response was:', response);
-      throw new Error('Failed to parse AI response.');
+      return { intent, reasoning: 'Fallback analysis (No JSON found)' };
     }
+    
+    let jsonString = response.substring(firstBrace, lastBrace + 1);
+    
+    // ✨ JSON 정리 로직 추가
+    jsonString = this.sanitizeJsonString(jsonString);
+    
+    const parsedResponse = JSON.parse(jsonString);
+    
+    const intent: VoiceIntent = {
+      action: parsedResponse.action || 'unknown',
+      product: parsedResponse.product,
+      target: parsedResponse.target,
+      detail: parsedResponse.detail,
+      confidence: parsedResponse.confidence || 0.8,
+      reasoning: parsedResponse.reasoning || 'AI analysis complete'
+    };
+    
+    return {
+      intent,
+      reasoning: parsedResponse.reasoning || 'AI analysis complete',
+    };
+  } catch (error: any) {
+    console.error('❌ [ai-controller] Failed to parse AI response:', error);
+    console.error('❌ [ai-controller] Response was:', response);
+    
+    // ✨ fallback 처리 추가
+    const fallbackAction = this.guessActionFromText(originalCommand);
+    const intent: VoiceIntent = {
+      action: fallbackAction,
+      confidence: 0.7,
+      reasoning: 'Fallback analysis (JSON parsing failed)'
+    };
+    return { intent, reasoning: 'Fallback analysis (JSON parsing failed)' };
   }
+}
+
+// ✨ 이 메서드도 추가
+private sanitizeJsonString(jsonString: string): string {
+  try {
+    // reasoning 값 내부의 따옴표 문제 해결
+    const reasoningMatch = jsonString.match(/"reasoning":\s*"([^"]*(?:"[^"]*"[^"]*)*[^"]*)"/);
+    if (reasoningMatch) {
+      const originalReasoning = reasoningMatch[1];
+      // 내부 따옴표를 작은따옴표로 변경
+      const cleanReasoning = originalReasoning.replace(/"/g, "'");
+      jsonString = jsonString.replace(reasoningMatch[0], `"reasoning": "${cleanReasoning}"`);
+    }
+    
+    // 기타 일반적인 JSON 오류 수정
+    jsonString = jsonString.replace(/[\r\n\t]/g, ' '); // 개행문자 제거
+    jsonString = jsonString.replace(/,\s*}/g, '}');    // 마지막 콤마 제거
+    
+    console.log('🔧 [ai-controller] Sanitized JSON:', jsonString);
+    return jsonString;
+  } catch (error) {
+    console.warn('⚠️ [ai-controller] JSON sanitization failed:', error);
+    return jsonString; // 원본 반환
+  }
+}
 
   private guessActionFromText(text: string): VoiceIntent['action'] {
     const lower = text.toLowerCase();

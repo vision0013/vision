@@ -100,7 +100,7 @@ async function testSingleCommand(testCase) {
     console.log(`⚡ 응답 시간: ${responseTime}ms`);
     
     if (response && response.intent) {
-      const { action, confidence, product, target } = response.intent;
+  const { action, confidence, product, target, reasoning } = response.intent; // ✨ reasoning 추가
       
       console.log(`🤖 AI 결과: ${action} (신뢰도: ${confidence})`);
       if (product) console.log(`   🛍️ 상품: ${product}`);
@@ -118,6 +118,7 @@ async function testSingleCommand(testCase) {
         responseTime,
         product,
         target,
+            reasoning, // ✨ 추가
         description
       };
       

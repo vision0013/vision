@@ -7,6 +7,7 @@ export interface VoiceIntent {
   detail?: string;
   context?: any;
   confidence: number; // 0-1 사이의 신뢰도
+    reasoning?: string; // ✨ 추가
 }
 
 export interface AIAnalysisResult {
