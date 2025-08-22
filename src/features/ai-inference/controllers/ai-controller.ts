@@ -3,13 +3,13 @@
 import { LlmInference, FilesetResolver } from '@mediapipe/tasks-genai';
 import { openDB } from 'idb';
 import { VoiceIntent, AIAnalysisResult, AIModelConfig, AIModelStatus } from '../types/ai-types';
+import { getPromptTemplate, AI_PROMPTS, CURRENT_PROMPT } from '../config/ai-prompts';
 
 // IndexedDB 설정
 const DB_NAME = 'ai-model-cache';
 const MODEL_STORE_NAME = 'models';
 const MODEL_KEY = 'gemma3-1b-it-int4';
 const DB_VERSION = 2;
-
 
 export class AIController {
   private llm: LlmInference | null = null;
@@ -18,6 +18,9 @@ export class AIController {
   };
 
   private readonly fullConfig: AIModelConfig;
+  
+  // ✨ 프롬프트 관리 - CURRENT_PROMPT 기반으로 초기화
+  private currentPromptName: keyof typeof AI_PROMPTS;
 
   constructor(config: AIModelConfig = {}) {
     this.fullConfig = {
@@ -25,12 +28,21 @@ export class AIController {
       modelPath: "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task?download=true",
       maxTokens: 2048,
       // ✨ [수정] 온도 값을 낮춰 분류 정확도 향상
-      temperature: 0.2,
+      temperature: 0.05,
       topK: 40,
       randomSeed: 42,
       ...config
     };
-    console.log('🤖 [ai-controller] Config initialized for API token download.');
+
+    // ✨ CURRENT_PROMPT에서 키 찾기
+    const currentKey = Object.keys(AI_PROMPTS).find(
+      key => AI_PROMPTS[key as keyof typeof AI_PROMPTS] === CURRENT_PROMPT
+    ) as keyof typeof AI_PROMPTS;
+    
+    this.currentPromptName = currentKey || 'SIMPLE_CLASSIFICATION';
+    
+    console.log(`🤖 [ai-controller] Config initialized for API token download.`);
+    console.log(`🎯 [ai-controller] Using prompt: ${this.currentPromptName} (${AI_PROMPTS[this.currentPromptName].name})`);
   }
 
   /**
@@ -192,116 +204,118 @@ export class AIController {
   }
 
   /**
-   * ✨ [수정] 우선순위 규칙을 명시하여 분류 정확도 향상
+   * ✨ 프롬프트 관리 메서드들
    */
-private buildAnalysisPrompt(voiceInput: string): string {
-  return `<start_of_turn>user
-You are an expert Korean voice command classifier. 
-Classify into ONE category: ["price_comparison", "purchase_flow", "simple_find", "navigation", "product_search"]
+  public setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {
+    this.currentPromptName = promptName;
+    console.log(`🔄 [ai-controller] Switched to prompt: ${AI_PROMPTS[promptName].name}`);
+  }
 
-Respond with JSON:
-{"action": "category", "product": "...", "target": "...", "confidence": 0.95, "reasoning": "explanation"}
+  public getCurrentPrompt(): string {
+    return AI_PROMPTS[this.currentPromptName].name;
+  }
 
-Rules (STRICT ORDER):
-1. **price_comparison**: 가격/할인 관련 ("최저가", "할인가", "얼마", "싼 곳")
-2. **purchase_flow**: 구매/주문 ("장바구니", "결제", "주문", "구매", "카트")  
-3. **simple_find**: UI 조작 ("버튼", "링크", "메뉴", "아이콘", "검색창" + "클릭/눌러/찾아")
-4. **navigation**: 페이지 이동 ("뒤로", "앞으로", "홈으로", "이전 페이지")
-5. **product_search**: 상품 검색 (제품명 + "찾아/검색/보여")
-
-Examples:
-- "검색창 찾아줘" → {"action": "simple_find", "target": "검색창", "confidence": 0.90}
-- "메뉴 버튼 눌러줘" → {"action": "simple_find", "target": "메뉴 버튼", "confidence": 0.88}
-- "카트에 추가해줘" → {"action": "purchase_flow", "target": "카트", "confidence": 0.92}
-- "아이폰 찾아줘" → {"action": "product_search", "product": "아이폰", "confidence": 0.95}
-
-Command: "${voiceInput}"
-<end_of_turn>
-<start_of_turn>model`;
-}
-
-
+  public getAvailablePrompts(): Array<{name: keyof typeof AI_PROMPTS, description: string}> {
+    return Object.entries(AI_PROMPTS).map(([key, value]) => ({
+      name: key as keyof typeof AI_PROMPTS,
+      description: value.description
+    }));
+  }
 
   /**
-   * ✨ [수정] 안정적인 파싱 로직 유지
+   * ✨ 설정 파일에서 프롬프트 가져오기 (CURRENT_PROMPT 기반)
    */
-private parseAIResponse(response: string, originalCommand: string): AIAnalysisResult {
-  try {
-    console.log('🔍 [ai-controller] Raw AI response:', response);
-    
-    const firstBrace = response.indexOf('{');
-    const lastBrace = response.lastIndexOf('}');
-    
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-      console.warn('⚠️ [ai-controller] No valid JSON object found in response, using fallback.');
+  private buildAnalysisPrompt(voiceInput: string): string {
+    const promptTemplate = getPromptTemplate(this.currentPromptName);
+    console.log(`🎯 [ai-controller] Using prompt template: ${promptTemplate.name}`);
+    return promptTemplate.template(voiceInput);
+  }
+
+  /**
+   * ✨ 안정적인 파싱 로직
+   */
+  private parseAIResponse(response: string, originalCommand: string): AIAnalysisResult {
+    try {
+      console.log('🔍 [ai-controller] Raw AI response:', response);
+      
+      const firstBrace = response.indexOf('{');
+      const lastBrace = response.lastIndexOf('}');
+      
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+        console.warn('⚠️ [ai-controller] No valid JSON object found in response, using fallback.');
+        const fallbackAction = this.guessActionFromText(originalCommand);
+        const intent: VoiceIntent = {
+          action: fallbackAction,
+          confidence: 0.8,
+          reasoning: 'Fallback analysis (No JSON found)'
+        };
+        return { intent, reasoning: 'Fallback analysis (No JSON found)' };
+      }
+      
+      let jsonString = response.substring(firstBrace, lastBrace + 1);
+      
+      // ✨ JSON 정리 로직
+      jsonString = this.sanitizeJsonString(jsonString);
+      
+      const parsedResponse = JSON.parse(jsonString);
+      
+      const intent: VoiceIntent = {
+        action: parsedResponse.action || 'unknown',
+        product: parsedResponse.product,
+        target: parsedResponse.target,
+        detail: parsedResponse.detail,
+        confidence: parsedResponse.confidence || 0.8,
+        reasoning: parsedResponse.reasoning || 'AI analysis complete'
+      };
+      
+      return {
+        intent,
+        reasoning: parsedResponse.reasoning || 'AI analysis complete',
+      };
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Failed to parse AI response:', error);
+      console.error('❌ [ai-controller] Response was:', response);
+      
+      // ✨ fallback 처리
       const fallbackAction = this.guessActionFromText(originalCommand);
       const intent: VoiceIntent = {
         action: fallbackAction,
-        confidence: 0.8,
-        reasoning: 'Fallback analysis (No JSON found)'
+        confidence: 0.7,
+        reasoning: 'Fallback analysis (JSON parsing failed)'
       };
-      return { intent, reasoning: 'Fallback analysis (No JSON found)' };
+      return { intent, reasoning: 'Fallback analysis (JSON parsing failed)' };
     }
-    
-    let jsonString = response.substring(firstBrace, lastBrace + 1);
-    
-    // ✨ JSON 정리 로직 추가
-    jsonString = this.sanitizeJsonString(jsonString);
-    
-    const parsedResponse = JSON.parse(jsonString);
-    
-    const intent: VoiceIntent = {
-      action: parsedResponse.action || 'unknown',
-      product: parsedResponse.product,
-      target: parsedResponse.target,
-      detail: parsedResponse.detail,
-      confidence: parsedResponse.confidence || 0.8,
-      reasoning: parsedResponse.reasoning || 'AI analysis complete'
-    };
-    
-    return {
-      intent,
-      reasoning: parsedResponse.reasoning || 'AI analysis complete',
-    };
-  } catch (error: any) {
-    console.error('❌ [ai-controller] Failed to parse AI response:', error);
-    console.error('❌ [ai-controller] Response was:', response);
-    
-    // ✨ fallback 처리 추가
-    const fallbackAction = this.guessActionFromText(originalCommand);
-    const intent: VoiceIntent = {
-      action: fallbackAction,
-      confidence: 0.7,
-      reasoning: 'Fallback analysis (JSON parsing failed)'
-    };
-    return { intent, reasoning: 'Fallback analysis (JSON parsing failed)' };
   }
-}
 
-// ✨ 이 메서드도 추가
-private sanitizeJsonString(jsonString: string): string {
-  try {
-    // reasoning 값 내부의 따옴표 문제 해결
-    const reasoningMatch = jsonString.match(/"reasoning":\s*"([^"]*(?:"[^"]*"[^"]*)*[^"]*)"/);
-    if (reasoningMatch) {
-      const originalReasoning = reasoningMatch[1];
-      // 내부 따옴표를 작은따옴표로 변경
-      const cleanReasoning = originalReasoning.replace(/"/g, "'");
-      jsonString = jsonString.replace(reasoningMatch[0], `"reasoning": "${cleanReasoning}"`);
+  /**
+   * JSON 문자열 정리
+   */
+  private sanitizeJsonString(jsonString: string): string {
+    try {
+      // reasoning 값 내부의 따옴표 문제 해결
+      const reasoningMatch = jsonString.match(/"reasoning":\s*"([^"]*(?:"[^"]*"[^"]*)*[^"]*)"/);
+      if (reasoningMatch) {
+        const originalReasoning = reasoningMatch[1];
+        // 내부 따옴표를 작은따옴표로 변경
+        const cleanReasoning = originalReasoning.replace(/"/g, "'");
+        jsonString = jsonString.replace(reasoningMatch[0], `"reasoning": "${cleanReasoning}"`);
+      }
+      
+      // 기타 일반적인 JSON 오류 수정
+      jsonString = jsonString.replace(/[\r\n\t]/g, ' '); // 개행문자 제거
+      jsonString = jsonString.replace(/,\s*}/g, '}');    // 마지막 콤마 제거
+      
+      console.log('🔧 [ai-controller] Sanitized JSON:', jsonString);
+      return jsonString;
+    } catch (error) {
+      console.warn('⚠️ [ai-controller] JSON sanitization failed:', error);
+      return jsonString; // 원본 반환
     }
-    
-    // 기타 일반적인 JSON 오류 수정
-    jsonString = jsonString.replace(/[\r\n\t]/g, ' '); // 개행문자 제거
-    jsonString = jsonString.replace(/,\s*}/g, '}');    // 마지막 콤마 제거
-    
-    console.log('🔧 [ai-controller] Sanitized JSON:', jsonString);
-    return jsonString;
-  } catch (error) {
-    console.warn('⚠️ [ai-controller] JSON sanitization failed:', error);
-    return jsonString; // 원본 반환
   }
-}
 
+  /**
+   * 폴백 분석
+   */
   private guessActionFromText(text: string): VoiceIntent['action'] {
     const lower = text.toLowerCase();
     console.log('🔍 [ai-controller] Fallback analysis for:', lower);

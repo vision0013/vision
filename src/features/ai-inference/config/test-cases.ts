@@ -7,7 +7,7 @@ export interface AITestCase {
   category: string;
 }
 
-export const AI_TEST_CASES: AITestCase[] = [
+export const AI_TEST_CASES2: AITestCase[] = [
   // product_search (5개)
   {
     command: "아이폰 15 찾아줘",
@@ -166,6 +166,158 @@ export const AI_TEST_CASES: AITestCase[] = [
     expected: "navigation",
     description: "앞으로 가기",
     category: "navigation"
+  }
+];
+
+export const AI_TEST_CASES: AITestCase[] = [
+  // 1. product_search vs price_comparison 경계선
+  {
+    command: "할인 제품 찾아줘",
+    expected: "product_search", // 제품 찾기가 주목적
+    description: "할인+제품 경계선 - 제품검색 우선",
+    category: "edge_product_price"
+  },
+  {
+    command: "저렴한 노트북 보여줘", 
+    expected: "product_search", // 노트북 검색이 주목적
+    description: "저렴+제품명 경계선",
+    category: "edge_product_price"
+  },
+  {
+    command: "특가 상품 검색해줘",
+    expected: "product_search", // 상품 검색이 주목적
+    description: "특가+검색 경계선",
+    category: "edge_product_price"
+  },
+  {
+    command: "이 제품 얼마예요",
+    expected: "price_comparison", // 가격 문의가 주목적
+    description: "제품+가격문의 경계선", 
+    category: "edge_product_price"
+  },
+  {
+    command: "아이폰 가격 비교해줘",
+    expected: "price_comparison", // 가격비교가 주목적
+    description: "제품명+가격비교 경계선",
+    category: "edge_product_price"
+  },
+
+  // 2. simple_find vs product_search 경계선  
+  {
+    command: "검색 버튼 클릭해줘",
+    expected: "simple_find", // UI 조작이 목적
+    description: "검색+버튼 경계선 - UI조작 우선",
+    category: "edge_ui_search"
+  },
+  {
+    command: "필터 메뉴 눌러줘",
+    expected: "simple_find", // UI 조작
+    description: "필터+UI 조작",
+    category: "edge_ui_search"
+  },
+  {
+    command: "카테고리 선택해줘", 
+    expected: "simple_find", // UI 조작
+    description: "카테고리 선택 - UI조작",
+    category: "edge_ui_search"
+  },
+  {
+    command: "상품 목록 보여줘",
+    expected: "product_search", // 상품 검색/표시
+    description: "상품목록 - 제품검색 우선",
+    category: "edge_ui_search"
+  },
+
+  // 3. navigation vs simple_find 경계선
+  {
+    command: "다음 페이지 버튼 클릭",
+    expected: "simple_find", // 버튼 클릭 = UI 조작
+    description: "페이지네이션 버튼 - UI조작 우선",
+    category: "edge_nav_ui"
+  },
+  {
+    command: "홈 버튼 눌러줘",
+    expected: "simple_find", // 버튼 조작
+    description: "홈버튼 클릭 - UI조작",
+    category: "edge_nav_ui" 
+  },
+  {
+    command: "상품 페이지로 가줘",
+    expected: "navigation", // 페이지 이동
+    description: "페이지 이동 - 네비게이션",
+    category: "edge_nav_ui"
+  },
+  {
+    command: "이전으로 돌아가줘",
+    expected: "navigation", // 페이지 이동
+    description: "뒤로가기 - 네비게이션",
+    category: "edge_nav_ui"
+  },
+
+  // 4. purchase_flow vs simple_find 경계선
+  {
+    command: "구매 버튼 찾아줘",
+    expected: "simple_find", // UI 요소 찾기
+    description: "구매버튼 찾기 - UI조작 우선",
+    category: "edge_purchase_ui"
+  },
+  {
+    command: "결제 페이지로 이동해줘",
+    expected: "navigation", // 페이지 이동
+    description: "결제페이지 이동 - 네비게이션",
+    category: "edge_purchase_nav"
+  },
+  {
+    command: "주문서 작성해줘",
+    expected: "purchase_flow", // 구매 프로세스
+    description: "주문서 작성 - 구매플로우",
+    category: "edge_purchase_ui"
+  },
+  {
+    command: "결제 정보 입력해줘",
+    expected: "purchase_flow", // 구매 프로세스  
+    description: "결제정보 입력 - 구매플로우",
+    category: "edge_purchase_ui"
+  },
+
+  // 5. 복합/애매한 케이스들
+  {
+    command: "로그인해서 구매해줘",
+    expected: "purchase_flow", // 최종 목적이 구매
+    description: "복합명령 - 구매가 최종목적",
+    category: "edge_complex"
+  },
+  {
+    command: "검색해서 최저가 찾아줘", 
+    expected: "price_comparison", // 최저가가 최종목적
+    description: "복합명령 - 가격비교가 최종목적",
+    category: "edge_complex"
+  },
+  {
+    command: "이거 장바구니에 있나 확인해줘",
+    expected: "simple_find", // 확인/찾기가 목적
+    description: "장바구니 확인 - 찾기 우선",
+    category: "edge_complex"
+  },
+
+  // 6. 자연어/구어체 경계선
+  {
+    command: "이거 사고싶어",
+    expected: "purchase_flow", // 구매 의사
+    description: "구매 의사 표현 - 구어체",
+    category: "edge_natural"
+  },
+  {
+    command: "얼마야 이거", 
+    expected: "price_comparison", // 가격 문의
+    description: "가격 문의 - 구어체",
+    category: "edge_natural"
+  },
+  {
+    command: "어디에 있지",
+    expected: "simple_find", // 찾기
+    description: "UI 요소 찾기 - 구어체", 
+    category: "edge_natural"
   }
 ];
 
