@@ -27,7 +27,14 @@ export class MessageRouter {
       'downloadAIModel', 
       'initializeAI',
       'loadAIModel',
-      'testAIAnalysis'
+      'testAIAnalysis',
+      'learnFromFailedTests',
+      'getLearnedStats',
+      'clearLearnedExamples',
+      'createSnapshot',
+      'getSnapshots',
+      'rollbackSnapshot',
+      'deleteSnapshot'
     ];
     aiActions.forEach(action => {
       this.handlers.set(action, handleAIMessage);
@@ -55,8 +62,7 @@ export class MessageRouter {
     const handler = this.handlers.get(request.action);
     
     if (handler) {
-      console.log(`📨 [router] Routing ${request.action} to handler`);
-      return await handler(request, sender);
+        return await handler(request, sender);
     }
     
     console.warn(`⚠️ [router] No handler for action: ${request.action}`);

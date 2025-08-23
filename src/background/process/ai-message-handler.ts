@@ -13,12 +13,14 @@ let requestCounter = 0;
 export async function handleAIMessage(
   request: AIMessageRequest
 ): Promise<any> {
+  // 중복 디버깅: 요청 전체 로그
   console.log(`🔄 [ai-handler] Processing AI request: ${request.action}`);
+  console.log(`🔍 [ai-handler] Full request:`, request);
+  console.log(`📍 [ai-handler] Request source: ${request.source || 'unknown'}, timestamp: ${request.timestamp || 'none'}`);
   
   try {
     // 1. Offscreen Document 준비
     if (!offscreenManager.isReady()) {
-      console.log('📄 [ai-handler] Creating offscreen document...');
       await offscreenManager.ensureReady();
       
       // Offscreen 준비 완료 대기
@@ -35,27 +37,29 @@ export async function handleAIMessage(
 
     // 2. Offscreen 준비 상태 확인 및 대기 (추가 안전장치)
     await offscreenManager.ensureReady();
-    console.log(`✅ [ai-handler] Offscreen document ready`);
     
     // 3. 액션명 변환 (Background → Offscreen)  
     const forwardAction = mapBackgroundActionToOffscreen(request.action);
-    console.log(`📤 [ai-handler] Forwarding ${request.action} → ${forwardAction}`);
     
     // 4. 타임스탬프 + 카운터 기반 요청 ID 생성
     const requestId = `${Date.now()}_${++requestCounter}`;
-    console.log(`🆔 [ai-handler] Request ID: ${requestId}`);
     
     // 5. Offscreen으로 메시지 전달 (ID 포함)
-    chrome.runtime.sendMessage({ 
+    const messageToSend = { 
       action: forwardAction, 
       requestId: requestId,
       token: request.token,
-      command: request.command
-    });
+      command: request.command,
+      failedTests: request.failedTests,
+      snapshotId: request.snapshotId,
+      description: request.description
+    };
+    // 중복 디버깅: 전송 메시지 로그
+    console.log(`📤 [ai-handler] Sending to Offscreen:`, messageToSend);
+    chrome.runtime.sendMessage(messageToSend);
     
     // 6. 응답 대기 (ID 기반 매칭 + 타임아웃 취소)
     const expectedResponse = mapBackgroundActionToResponse(request.action);
-    console.log(`⏳ [ai-handler] Waiting for response: ${expectedResponse} with ID: ${requestId}`);
     
     const response = await new Promise((resolve) => {
       let timeoutId: NodeJS.Timeout;
@@ -65,7 +69,6 @@ export async function handleAIMessage(
         if (msg.action === expectedResponse && msg.requestId === requestId) {
           chrome.runtime.onMessage.removeListener(listener);
           clearTimeout(timeoutId); // 타임아웃 취소
-          console.log(`✅ [ai-handler] Received ${expectedResponse} for ID ${requestId}:`, msg);
           resolve(msg);
         }
       };
@@ -75,7 +78,6 @@ export async function handleAIMessage(
       const timeoutDuration = request.action === 'downloadAIModel' ? 12 * 60 * 1000 : 30000;
       timeoutId = setTimeout(() => {
         chrome.runtime.onMessage.removeListener(listener);
-        console.error(`⏰ [ai-handler] Timeout waiting for ${expectedResponse} with ID: ${requestId}`);
         resolve({ error: 'AI operation timeout' });
       }, timeoutDuration);
     });
@@ -83,7 +85,6 @@ export async function handleAIMessage(
     return response;
     
   } catch (error: any) {
-    console.error(`❌ [ai-handler] Error processing ${request.action}:`, error.message);
     return { error: error.message };
   }
 }
@@ -98,7 +99,14 @@ function mapBackgroundActionToOffscreen(action: string): string {
     'loadAIModel': 'initializeAI', // Load Model도 같은 Offscreen 액션 사용
     'getAIModelStatus': 'getModelStatus',
     'testAIAnalysis': 'analyzeIntent',
-    'deleteAIModel': 'deleteModel'
+    'deleteAIModel': 'deleteModel',
+    'learnFromFailedTests': 'learnFromFailedTests', // 새로운 학습 기능
+    'getLearnedStats': 'getLearnedStats', // 학습 현황 조회
+    'clearLearnedExamples': 'clearLearnedExamples', // 학습 데이터 초기화
+    'createSnapshot': 'createSnapshot', // 스냅샷 생성
+    'getSnapshots': 'getSnapshots', // 스냅샷 목록
+    'rollbackSnapshot': 'rollbackSnapshot', // 스냅샷 복원
+    'deleteSnapshot': 'deleteSnapshot' // 스냅샷 삭제
   };
   
   return actionMap[action] || action;
@@ -114,7 +122,14 @@ function mapBackgroundActionToResponse(action: string): string {
     'initializeAI': 'aiInitialized',
     'loadAIModel': 'aiInitialized', // Load Model도 같은 응답 기대
     'testAIAnalysis': 'analysisResult',
-    'getAIModelStatus': 'modelStatusResponse'
+    'getAIModelStatus': 'modelStatusResponse',
+    'learnFromFailedTests': 'learningCompleted', // 학습 완료 응답
+    'getLearnedStats': 'statsResponse', // 학습 현황 응답
+    'clearLearnedExamples': 'clearCompleted', // 초기화 완료 응답
+    'createSnapshot': 'snapshotCreated', // 스냅샷 생성 완료
+    'getSnapshots': 'snapshotsResponse', // 스냅샷 목록 응답
+    'rollbackSnapshot': 'rollbackCompleted', // 롤백 완료 응답
+    'deleteSnapshot': 'snapshotDeleted' // 스냅샷 삭제 완료
   };
   
   return responseMap[action] || 'modelStatusResponse';

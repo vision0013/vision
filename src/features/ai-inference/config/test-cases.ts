@@ -7,7 +7,8 @@ export interface AITestCase {
   category: string;
 }
 
-export const AI_TEST_CASES2: AITestCase[] = [
+// 기본 테스트 (카테고리별 기본 명령들)
+export const AI_TEST_CASES_BASIC: AITestCase[] = [
   // product_search (5개)
   {
     command: "아이폰 15 찾아줘",
@@ -169,7 +170,8 @@ export const AI_TEST_CASES2: AITestCase[] = [
   }
 ];
 
-export const AI_TEST_CASES: AITestCase[] = [
+// 기본 테스트 (경계선 케이스들)
+export const AI_TEST_CASES_EDGE: AITestCase[] = [
   // 1. product_search vs price_comparison 경계선
   {
     command: "할인 제품 찾아줘",
@@ -329,6 +331,100 @@ export interface AITestResult {
   isCorrect: boolean;
   error?: string;
 }
+
+// 자연어/구어체 테스트
+export const AI_TEST_CASES_NATURAL: AITestCase[] = [
+  {
+    command: "이거 사고싶어",
+    expected: "purchase_flow",
+    description: "구매 의사 표현 - 구어체",
+    category: "natural_purchase"
+  },
+  {
+    command: "얼마야 이거",
+    expected: "price_comparison", 
+    description: "가격 문의 - 구어체",
+    category: "natural_price"
+  },
+  {
+    command: "어디에 있지",
+    expected: "simple_find",
+    description: "UI 요소 찾기 - 구어체",
+    category: "natural_find" 
+  },
+  {
+    command: "좀 찾아봐",
+    expected: "product_search",
+    description: "검색 요청 - 구어체",
+    category: "natural_search"
+  },
+  {
+    command: "뭐가 더 싸?",
+    expected: "price_comparison",
+    description: "가격 비교 - 구어체",
+    category: "natural_price"
+  }
+];
+
+// 복합 명령 테스트
+export const AI_TEST_CASES_COMPLEX: AITestCase[] = [
+  {
+    command: "로그인해서 구매해줘",
+    expected: "purchase_flow",
+    description: "복합명령 - 구매가 최종목적",
+    category: "complex_purchase"
+  },
+  {
+    command: "검색해서 최저가 찾아줘",
+    expected: "price_comparison", 
+    description: "복합명령 - 가격비교가 최종목적",
+    category: "complex_price"
+  },
+  {
+    command: "이거 장바구니에 있나 확인해줘",
+    expected: "simple_find",
+    description: "장바구니 확인 - 찾기 우선",
+    category: "complex_find"
+  },
+  {
+    command: "메뉴에서 할인 상품 찾아줘",
+    expected: "product_search",
+    description: "복합명령 - 제품검색이 최종목적",
+    category: "complex_search"
+  },
+  {
+    command: "카테고리 선택하고 정렬해줘",
+    expected: "simple_find",
+    description: "복합 UI 조작",
+    category: "complex_ui"
+  }
+];
+
+// 테스트 세트 맵
+export const AI_TEST_SETS = {
+  basic: {
+    name: "기본 테스트",
+    description: "카테고리별 기본 명령어들",
+    cases: AI_TEST_CASES_BASIC
+  },
+  edge: {
+    name: "경계선 테스트", 
+    description: "애매한 경계선 케이스들",
+    cases: AI_TEST_CASES_EDGE
+  },
+  natural: {
+    name: "자연어 테스트",
+    description: "구어체/자연스러운 표현들", 
+    cases: AI_TEST_CASES_NATURAL
+  },
+  complex: {
+    name: "복합 명령 테스트",
+    description: "여러 동작을 포함한 복합 명령들",
+    cases: AI_TEST_CASES_COMPLEX
+  }
+} as const;
+
+export type AITestSetKey = keyof typeof AI_TEST_SETS;
 
 export interface AITestSummary {
   totalTests: number;

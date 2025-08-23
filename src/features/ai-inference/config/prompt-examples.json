@@ -1,0 +1,94 @@
+{
+  "baseExamples": [
+    {
+      "command": "아이폰 15 찾아줘",
+      "action": "product_search",
+      "confidence": 0.95,
+      "reasoning": "제품명이 명확하고 검색 의도가 분명함"
+    },
+    {
+      "command": "저렴한 노트북 보여줘",
+      "action": "product_search",
+      "confidence": 0.9,
+      "reasoning": "가격 조건과 함께 제품 검색 요청"
+    },
+    {
+      "command": "이 제품 얼마예요",
+      "action": "price_comparison",
+      "confidence": 0.85,
+      "reasoning": "현재 제품의 가격 정보 요청"
+    },
+    {
+      "command": "아이폰 가격 비교해줘",
+      "action": "price_comparison",
+      "confidence": 0.9,
+      "reasoning": "특정 제품의 가격 비교 요청"
+    },
+    {
+      "command": "검색 버튼 클릭해줘",
+      "action": "simple_find",
+      "confidence": 0.95,
+      "reasoning": "UI 요소에 대한 명확한 조작 요청"
+    },
+    {
+      "command": "홈 버튼 눌러줘",
+      "action": "simple_find",
+      "confidence": 0.9,
+      "reasoning": "네비게이션 UI 요소 클릭 요청"
+    },
+    {
+      "command": "구매 버튼 찾아줘",
+      "action": "simple_find",
+      "confidence": 0.85,
+      "reasoning": "구매 관련 UI 요소 탐색 요청"
+    },
+    {
+      "command": "카테고리 선택해줘",
+      "action": "simple_find",
+      "confidence": 0.8,
+      "reasoning": "카테고리 UI 요소 조작 요청"
+    },
+    {
+      "command": "이거 장바구니에 있나 확인해줘",
+      "action": "simple_find",
+      "confidence": 0.8,
+      "reasoning": "장바구니 상태 확인을 위한 UI 탐색"
+    },
+    {
+      "command": "검색해서 최저가 찾아줘",
+      "action": "price_comparison",
+      "confidence": 0.9,
+      "reasoning": "검색과 가격 비교를 결합한 복합 요청"
+    },
+    {
+      "command": "이거 사고싶어",
+      "action": "purchase_flow",
+      "confidence": 0.85,
+      "reasoning": "구매 의사 표현으로 구매 프로세스 시작"
+    },
+    {
+      "command": "주문서 작성해줘",
+      "action": "purchase_flow",
+      "confidence": 0.95,
+      "reasoning": "구매 프로세스의 구체적 단계 요청"
+    },
+    {
+      "command": "결제 페이지로 이동해줘",
+      "action": "navigation",
+      "confidence": 0.9,
+      "reasoning": "결제 페이지로의 명확한 이동 요청"
+    },
+    {
+      "command": "어디에 있지",
+      "action": "simple_find",
+      "confidence": 0.7,
+      "reasoning": "불특정 요소의 위치 탐색 요청"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "lastUpdated": "2025-01-28",
+    "description": "AI 음성 명령 분류를 위한 기본 예시 데이터",
+    "totalExamples": 14
+  }
+}

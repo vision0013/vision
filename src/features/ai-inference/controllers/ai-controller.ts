@@ -2,17 +2,39 @@
 
 import { LlmInference, FilesetResolver } from '@mediapipe/tasks-genai';
 import { VoiceIntent, AIAnalysisResult, AIModelConfig, AIModelStatus } from '../types/ai-types';
-import { getPromptTemplate, AI_PROMPTS, CURRENT_PROMPT } from '../config/ai-prompts';
+import { getPromptTemplate, AI_PROMPTS, CURRENT_PROMPT, getBaseExamples, PromptExample } from '../config/ai-prompts';
+
+export interface LearningSnapshot {
+  id: string;
+  name: string;
+  createdAt: Date;
+  examples: PromptExample[];
+  testResults?: {
+    accuracy: number;
+    totalTests: number;
+    correctTests: number;
+    avgConfidence: number;
+  };
+  description?: string;
+}
 
 // OPFS 설정 (IndexedDB 제거, OPFS만 사용)
 const MODEL_KEY = 'gemma3-4b-it-int4';
 const MODEL_FILE_NAME = `${MODEL_KEY}.bin`;
+const LEARNED_EXAMPLES_FILE_NAME = 'learned-examples.json';
+const LEARNED_EXAMPLES_BACKUP_FILE_NAME = 'learned-examples-backup.json';
+const SNAPSHOTS_DIR_NAME = 'snapshots';
+
+// 최대 스냅샷 개수 상수 추가
+const MAX_SNAPSHOTS = 20;
+
 
 export class AIController {
   private llm: LlmInference | null = null;
   private modelStatus: AIModelStatus = {
     state: 1 // 1: 캐시없음/로딩안됨
   };
+  private isLearning: boolean = false; // 학습 중복 방지
 
   private readonly fullConfig: AIModelConfig;
   
@@ -340,7 +362,7 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
 
       try {
         console.log(`🔄 [ai-controller] Processing analysis (${this.analysisQueue.length} remaining)`);
-        const prompt = this.buildAnalysisPrompt(voiceInput);
+        const prompt = await this.buildAnalysisPrompt(voiceInput);
         const response = await this.llm!.generateResponse(prompt);
         const result = this.parseAIResponse(response, voiceInput);
         resolve(result);
@@ -374,11 +396,131 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
 
   /**
    * ✨ 설정 파일에서 프롬프트 가져오기 (CURRENT_PROMPT 기반)
+   * JSON 파일의 기본 예시 + Chrome Storage의 학습된 예시를 결합
    */
-  private buildAnalysisPrompt(voiceInput: string): string {
+  private async buildAnalysisPrompt(voiceInput: string): Promise<string> {
     const promptTemplate = getPromptTemplate(this.currentPromptName);
     console.log(`🎯 [ai-controller] Using prompt template: ${promptTemplate.name}`);
-    return promptTemplate.template(voiceInput);
+
+    // 기본 예시들 로드
+    const baseExamples = getBaseExamples();
+    
+    // Chrome Storage에서 추가 학습된 예시들 로드
+    const learnedExamples = await this.getLearnedExamples();
+    
+    // 모든 예시 결합 (학습된 예시가 우선순위 높음)
+    const allExamples = [...learnedExamples, ...baseExamples];
+    
+    console.log(`📚 [ai-controller] Using ${baseExamples.length} base examples + ${learnedExamples.length} learned examples`);
+    
+    return promptTemplate.template(voiceInput, allExamples);
+  }
+
+  /**
+   * OPFS에서 학습된 예시들 로드
+   */
+  private async getLearnedExamples(): Promise<PromptExample[]> {
+    try {
+      console.log('📖 [ai-controller] Loading learned examples from OPFS...');
+      
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: true });
+      
+      try {
+        const fileHandle = await modelsDir.getFileHandle(LEARNED_EXAMPLES_FILE_NAME, { create: false });
+        const file = await fileHandle.getFile();
+        const content = await file.text();
+        
+        if (!content.trim()) {
+          console.log('📖 [ai-controller] Learned examples file is empty');
+          return [];
+        }
+        
+        const learnedExamples = JSON.parse(content);
+        console.log(`📖 [ai-controller] Loaded ${learnedExamples.length} learned examples from OPFS`);
+        return learnedExamples;
+        
+      } catch (error: any) {
+        if (error.name === 'NotFoundError') {
+          console.log('📖 [ai-controller] No learned examples file found, starting fresh');
+          return [];
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ [ai-controller] Failed to load learned examples from OPFS:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 실패한 테스트 케이스들을 학습 예시로 저장 (OPFS 파일)
+   */
+  public async learnFromFailedTests(failedTests: Array<{ command: string; expected: string; description: string }>): Promise<void> {
+    // 중복 실행 방지
+    if (this.isLearning) {
+      console.warn('⚠️ [ai-controller] Learning already in progress, skipping...');
+      return;
+    }
+
+    this.isLearning = true;
+    try {
+      console.log('🧠 [ai-controller] Learning from failed tests to OPFS...');
+      
+      // 📸 학습 전 자동 스냅샷 생성
+      const failedCommands = failedTests.map(t => t.command).join(', ');
+      const snapshotDescription = `Before learning ${failedTests.length} failed cases: ${failedCommands.substring(0, 100)}${failedCommands.length > 100 ? '...' : ''}`;
+      
+      try {
+        await this.createSnapshot(snapshotDescription);
+        console.log('📸 [ai-controller] Auto-snapshot created before learning');
+      } catch (snapshotError) {
+        console.warn('⚠️ [ai-controller] Failed to create auto-snapshot, but continuing with learning:', snapshotError);
+      }
+      
+      const currentLearned = await this.getLearnedExamples();
+      
+      // 새로운 예시들을 생성 (중복 제거)
+      const newExamples: PromptExample[] = failedTests
+        .filter(test => !currentLearned.some(learned => learned.command === test.command))
+        .map(test => ({
+          command: test.command,
+          action: test.expected,
+          confidence: 0.95, // 학습된 예시는 높은 confidence로 설정
+          reasoning: this.generateReasoningForAction(test.command, test.expected, test.description)
+        }));
+
+      if (newExamples.length > 0) {
+        const updatedExamples = [...currentLearned, ...newExamples];
+        await this.saveLearnedExamplesToOPFS(updatedExamples);
+        console.log(`✅ [ai-controller] Learned ${newExamples.length} new examples. Total learned: ${updatedExamples.length}`);
+      } else {
+        console.log('ℹ️ [ai-controller] No new examples to learn (all already exist)');
+      }
+    } catch (error) {
+      console.error('❌ [ai-controller] Failed to learn from failed tests:', error);
+      throw error;
+    } finally {
+      this.isLearning = false; // 플래그 해제
+    }
+  }
+
+  /**
+   * 액션에 대한 적절한 reasoning 생성
+   */
+  private generateReasoningForAction(command: string, action: string, description?: string): string {
+    const baseReasonings = {
+      'product_search': `'${command}'에서 제품 검색 의도가 명확하여 상품 검색으로 분류`,
+      'price_comparison': `'${command}'에서 가격, 최저가, 비교 등의 키워드가 포함되어 가격 비교로 분류`,
+      'simple_find': `'${command}'에서 버튼, 클릭, 찾기 등 UI 조작 의도가 명확함`,
+      'purchase_flow': `'${command}'에서 구매, 주문, 장바구니 등 구매 프로세스 진행 의도`,
+      'navigation': `'${command}'에서 페이지 이동, 뒤로가기 등 네비게이션 의도`
+    };
+
+    const baseReasoning = baseReasonings[action as keyof typeof baseReasonings] || 
+                         `'${command}'에서 ${action} 카테고리의 특징적 요소가 식별됨`;
+    
+    return description ? `${baseReasoning}. ${description}` : baseReasoning;
   }
 
   /**
@@ -399,7 +541,7 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
           confidence: 0.8,
           reasoning: 'Fallback analysis (No JSON found)'
         };
-        return { intent, reasoning: 'Fallback analysis (No JSON found)' };
+        return { intent };
       }
       
       let jsonString = response.substring(firstBrace, lastBrace + 1);
@@ -414,13 +556,12 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
         product: parsedResponse.product,
         target: parsedResponse.target,
         detail: parsedResponse.detail,
-        confidence: parsedResponse.confidence || 0.8,
-        reasoning: parsedResponse.reasoning || 'AI analysis complete'
+        confidence: parsedResponse.confidence ?? 0.8,
+        reasoning: parsedResponse.reasoning ?? 'AI analysis complete'
       };
       
       return {
-        intent,
-        reasoning: parsedResponse.reasoning || 'AI analysis complete',
+        intent
       };
     } catch (error: any) {
       console.error('❌ [ai-controller] Failed to parse AI response:', error);
@@ -433,7 +574,7 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
         confidence: 0.7,
         reasoning: 'Fallback analysis (JSON parsing failed)'
       };
-      return { intent, reasoning: 'Fallback analysis (JSON parsing failed)' };
+      return { intent };
     }
   }
 
@@ -535,6 +676,304 @@ modelPath: "https://huggingface.co/litert-community/Gemma3-4B-IT/resolve/main/ge
         stack: error.stack
       });
       throw new Error(`OPFS file URL creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * OPFS에 학습된 예시들을 JSON 파일로 저장
+   */
+  private async saveLearnedExamplesToOPFS(learnedExamples: PromptExample[]): Promise<void> {
+    try {
+      console.log('💾 [ai-controller] Saving learned examples to OPFS...');
+      
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: true });
+      const fileHandle = await modelsDir.getFileHandle(LEARNED_EXAMPLES_FILE_NAME, { create: true });
+      
+      const writable = await fileHandle.createWritable();
+      
+      // JSON 데이터를 예쁘게 포맷팅하여 저장
+      const jsonContent = JSON.stringify(learnedExamples, null, 2);
+      await writable.write(jsonContent);
+      await writable.close();
+      
+      console.log(`💾 [ai-controller] Saved ${learnedExamples.length} learned examples to OPFS (${jsonContent.length} bytes)`);
+      
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Failed to save learned examples to OPFS:', error);
+      throw new Error(`OPFS learned examples save failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * OPFS에서 학습된 예시 파일 삭제 (필요시)
+   */
+  public async clearLearnedExamples(): Promise<void> {
+    try {
+      console.log('🗑️ [ai-controller] Clearing learned examples from OPFS...');
+      
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: false });
+      
+      try {
+        await modelsDir.removeEntry(LEARNED_EXAMPLES_FILE_NAME);
+        console.log('✅ [ai-controller] Learned examples file deleted from OPFS');
+      } catch (error: any) {
+        if (error.name === 'NotFoundError') {
+          console.log('ℹ️ [ai-controller] No learned examples file to delete');
+        } else {
+          throw error;
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Failed to clear learned examples:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 학습된 예시 현황 조회
+   */
+  public async getLearnedExamplesStats(): Promise<{count: number, size: number}> {
+    try {
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: false });
+      const fileHandle = await modelsDir.getFileHandle(LEARNED_EXAMPLES_FILE_NAME, { create: false });
+      const file = await fileHandle.getFile();
+      
+      const content = await file.text();
+      const examples = content.trim() ? JSON.parse(content) : [];
+      
+      return {
+        count: examples.length,
+        size: file.size
+      };
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        return { count: 0, size: 0 };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 현재 학습 데이터의 스냅샷 생성 (학습 전 백업)
+   */
+  public async createSnapshot(description?: string): Promise<LearningSnapshot> {
+    try {
+      console.log('📸 [ai-controller] Creating learning data snapshot...');
+      
+    // --- 추가될 로직 시작 ---
+    const snapshots = await this.getSnapshots();
+    if (snapshots.length >= MAX_SNAPSHOTS) {
+      // 가장 오래된 스냅샷 찾기 (생성 날짜 오름차순 정렬)
+      const oldestSnapshot = snapshots.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+      if (oldestSnapshot) {
+        console.log(`🗑️ [ai-controller] Max snapshots reached. Deleting oldest: ${oldestSnapshot.name}`);
+        await this.deleteSnapshot(oldestSnapshot.id);
+      }
+    }
+    // --- 추가될 로직 끝 ---
+
+      const currentExamples = await this.getLearnedExamples();
+      const snapshotId = `snapshot_${Date.now()}`;
+      const snapshotName = description || `Auto backup ${new Date().toLocaleString()}`;
+      
+      const snapshot: LearningSnapshot = {
+        id: snapshotId,
+        name: snapshotName,
+        createdAt: new Date(),
+        examples: currentExamples,
+        description
+      };
+      
+      // 스냅샷을 OPFS에 저장
+      await this.saveSnapshotToOPFS(snapshot);
+      
+      console.log(`📸 [ai-controller] Snapshot created: ${snapshotId} with ${currentExamples.length} examples`);
+      return snapshot;
+      
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Failed to create snapshot:', error);
+      throw new Error(`Snapshot creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * 특정 스냅샷으로 롤백
+   */
+  public async rollbackToSnapshot(snapshotId: string): Promise<boolean> {
+    try {
+      console.log(`⏪ [ai-controller] Rolling back to snapshot: ${snapshotId}`);
+      
+      const snapshot = await this.loadSnapshotFromOPFS(snapshotId);
+      if (!snapshot) {
+        throw new Error(`Snapshot not found: ${snapshotId}`);
+      }
+      
+      // 현재 데이터를 백업용으로 저장
+      await this.createBackupBeforeRollback();
+      
+      // 스냅샷 데이터로 현재 파일 교체
+      await this.saveLearnedExamplesToOPFS(snapshot.examples);
+      
+      console.log(`⏪ [ai-controller] Successfully rolled back to snapshot: ${snapshotId}`);
+      console.log(`📊 [ai-controller] Restored ${snapshot.examples.length} examples from ${snapshot.name}`);
+      
+      return true;
+      
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Rollback failed:', error);
+      throw new Error(`Rollback failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * 모든 스냅샷 목록 조회
+   */
+  public async getSnapshots(): Promise<LearningSnapshot[]> {
+    try {
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: true });
+      
+      try {
+        const snapshotsDir = await modelsDir.getDirectoryHandle(SNAPSHOTS_DIR_NAME, { create: false });
+        const snapshots: LearningSnapshot[] = [];
+        
+        // @ts-ignore - OPFS의 entries() 메서드 사용
+        for await (const [name, handle] of snapshotsDir.entries()) {
+          if (handle.kind === 'file' && name.endsWith('.json')) {
+            try {
+              const file = await handle.getFile();
+              const content = await file.text();
+              const snapshot = JSON.parse(content);
+              
+              // Date 객체로 변환
+              snapshot.createdAt = new Date(snapshot.createdAt);
+              snapshots.push(snapshot);
+            } catch (error) {
+              console.warn(`⚠️ [ai-controller] Failed to load snapshot ${name}:`, error);
+            }
+          }
+        }
+        
+        // 생성 시간순으로 정렬 (최신순)
+        return snapshots.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        
+      } catch (error: any) {
+        if (error.name === 'NotFoundError') {
+          console.log('📸 [ai-controller] No snapshots directory found');
+          return [];
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ [ai-controller] Failed to get snapshots:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 특정 스냅샷 삭제
+   */
+  public async deleteSnapshot(snapshotId: string): Promise<boolean> {
+    try {
+      console.log(`🗑️ [ai-controller] Deleting snapshot: ${snapshotId}`);
+      
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: false });
+      const snapshotsDir = await modelsDir.getDirectoryHandle(SNAPSHOTS_DIR_NAME, { create: false });
+      
+      const fileName = `${snapshotId}.json`;
+      await snapshotsDir.removeEntry(fileName);
+      
+      console.log(`✅ [ai-controller] Snapshot deleted: ${snapshotId}`);
+      return true;
+      
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        console.log(`ℹ️ [ai-controller] Snapshot not found: ${snapshotId}`);
+        return false;
+      }
+      console.error('❌ [ai-controller] Failed to delete snapshot:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 스냅샷을 OPFS에 저장
+   */
+  private async saveSnapshotToOPFS(snapshot: LearningSnapshot): Promise<void> {
+    try {
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: true });
+      const snapshotsDir = await modelsDir.getDirectoryHandle(SNAPSHOTS_DIR_NAME, { create: true });
+      
+      const fileName = `${snapshot.id}.json`;
+      const fileHandle = await snapshotsDir.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      
+      const jsonContent = JSON.stringify(snapshot, null, 2);
+      await writable.write(jsonContent);
+      await writable.close();
+      
+      console.log(`💾 [ai-controller] Snapshot saved to OPFS: ${fileName} (${jsonContent.length} bytes)`);
+      
+    } catch (error: any) {
+      console.error('❌ [ai-controller] Failed to save snapshot to OPFS:', error);
+      throw new Error(`Snapshot save failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * OPFS에서 스냅샷 로드
+   */
+  private async loadSnapshotFromOPFS(snapshotId: string): Promise<LearningSnapshot | null> {
+    try {
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: false });
+      const snapshotsDir = await modelsDir.getDirectoryHandle(SNAPSHOTS_DIR_NAME, { create: false });
+      
+      const fileName = `${snapshotId}.json`;
+      const fileHandle = await snapshotsDir.getFileHandle(fileName, { create: false });
+      const file = await fileHandle.getFile();
+      const content = await file.text();
+      
+      const snapshot = JSON.parse(content);
+      snapshot.createdAt = new Date(snapshot.createdAt);
+      
+      return snapshot;
+      
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        console.log(`📸 [ai-controller] Snapshot not found: ${snapshotId}`);
+        return null;
+      }
+      console.error('❌ [ai-controller] Failed to load snapshot from OPFS:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 롤백 전 현재 데이터를 백업 파일로 저장
+   */
+  private async createBackupBeforeRollback(): Promise<void> {
+    try {
+      const currentExamples = await this.getLearnedExamples();
+      const opfsRoot = await navigator.storage.getDirectory();
+      const modelsDir = await opfsRoot.getDirectoryHandle('models', { create: true });
+      const fileHandle = await modelsDir.getFileHandle(LEARNED_EXAMPLES_BACKUP_FILE_NAME, { create: true });
+      
+      const writable = await fileHandle.createWritable();
+      const jsonContent = JSON.stringify(currentExamples, null, 2);
+      await writable.write(jsonContent);
+      await writable.close();
+      
+      console.log('💾 [ai-controller] Created backup before rollback');
+      
+    } catch (error) {
+      console.warn('⚠️ [ai-controller] Failed to create backup before rollback:', error);
+      // 백업 실패해도 롤백은 계속 진행
     }
   }
 }
