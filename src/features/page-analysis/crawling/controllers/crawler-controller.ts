@@ -2,15 +2,21 @@ import { CrawledItem, AnalysisResult, ICrawler } from '@/types';
 import { CrawlerState } from '../types/crawler-state';
 import { createCrawlerState, updateVisibility } from '../process/state-management';
 import { walkElement, removeDuplicates } from '../process/dom-walking';
+import { processNaverIframes } from '../process/naver-iframe-handler';
 
 let globalState: CrawlerState | null = null;
 
-export function analyze(): AnalysisResult {
+export async function analyze(): Promise<AnalysisResult> {
   const T0 = performance.now();
   const state = createCrawlerState();
   globalState = state;
   
   walkElement(document.body, state, null);
+  
+  // 네이버 블로그 iframe 처리 (간소화된 버전)
+  if (window.location.hostname.includes('blog.naver.com')) {
+    await processNaverIframes(state);
+  }
   
   const finalItems = removeDuplicates(state.items);
   state.items = finalItems;

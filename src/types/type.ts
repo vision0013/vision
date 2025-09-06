@@ -6,7 +6,7 @@ export interface BoundingBox {
   hidden?: boolean;
 }
 
-export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container' | 'input' | 'textarea' | 'select';
+export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container' | 'input' | 'textarea' | 'select' | 'iframe';
 
 export interface CrawledItem {
   id: number;
@@ -46,8 +46,8 @@ export interface MessagePayload {
   payload?: AnalysisResult;
 }
 
-// ✨ 새로운 크롤러 인터페이스 정의
+// ✨ 크롤러 인터페이스 정의 (네이버 iframe 지원)
 export interface ICrawler {
-  analyze(): AnalysisResult;
+  analyze(): Promise<AnalysisResult>;
   analyzeElements(elements: HTMLElement[]): CrawledItem[];
 }

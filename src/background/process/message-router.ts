@@ -5,6 +5,7 @@ import { handleAIMessage } from './ai-message-handler';
 import { handleVoiceCommand } from './voice-command-handler';
 import { handleHighlightMessage } from './highlight-message-handler';
 import { handleCrawlComplete, handleAddNewItems } from './crawl-message-handler';
+import { handleMarkdownMessage } from './markdown-message-handler';
 
 /**
  * 메시지 라우터 클래스 - 효율적인 라우팅을 위한 Map 사용
@@ -50,6 +51,18 @@ export class MessageRouter {
     // 크롤링 관련
     this.handlers.set('crawlComplete', handleCrawlComplete);
     this.handlers.set('addNewItems', handleAddNewItems);
+
+    // 마크다운 관련
+    const markdownActions = [
+      'GET_PAGE_CONTENT',
+      'PROCESS_HTML_TO_MARKDOWN',
+      'DOWNLOAD_MARKDOWN'
+    ];
+    markdownActions.forEach(action => {
+      this.handlers.set(action, handleMarkdownMessage);
+    });
+
+    // 탭 관리는 기존 Background 시스템이 완벽하게 처리하므로 제거
   }
 
   /**
@@ -87,6 +100,8 @@ export class MessageRouter {
     }
     return removed;
   }
+
+  // 탭 ID 핸들러 제거 - Background가 이미 탭별로 관리함
 
   /**
    * 등록된 액션 목록 조회 (디버깅용)

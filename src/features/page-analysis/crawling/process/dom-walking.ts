@@ -1,5 +1,5 @@
 import { CrawledItem } from '@/types';
-import { MAX_NODES, TARGET_TAGS, SKIP_TAGS } from '../../crawling/config/constants';
+import { MAX_NODES, TARGET_TAGS, SKIP_TAGS, IFRAME_TAGS } from '../../crawling/config/constants';
 import { CrawlerState } from '../types/crawler-state';
 import { normText } from './text-processing';
 import { isCurrentlyVisible, roleOf, bbox } from './element-analysis';
@@ -45,6 +45,45 @@ export function walkElement(
     rect: bbox(el),
     parentId: parentElId,
   };
+
+  // iframe 처리: 네이버 블로그 스타일 iframe 내부 컨텐츠 크롤링
+  if (IFRAME_TAGS.has(tag)) {
+    try {
+      const iframe = el as HTMLIFrameElement;
+      const src = iframe.src;
+      
+      // 같은 도메인 iframe만 처리 (CORS 제한으로 인해)
+      if (src && (src.startsWith('/') || src.includes(window.location.hostname))) {
+        state.items.push({ 
+          id: state.nextItemId++, 
+          ownerId, 
+          parentId: parentElId, 
+          tag, 
+          role: meta.role, 
+          rect: meta.rect, 
+          type: "iframe", 
+          src: src,
+          text: `iframe: ${src}`,
+          hidden: !isCurrentlyVisible(el)
+        });
+
+        // iframe 내부 문서 접근 시도
+        try {
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc && iframeDoc.body) {
+            // iframe 내부 DOM을 재귀적으로 크롤링
+            walkElement(iframeDoc.body, state, ownerId, isDescendantOfLink, isDescendantOfButton);
+          }
+        } catch (e) {
+          // CORS 에러 등으로 접근 불가능한 경우는 무시
+          console.log(`Cannot access iframe content: ${src}`);
+        }
+      }
+    } catch (e) {
+      console.error('Error processing iframe:', e);
+    }
+    return; // iframe 처리 후 하위 탐색 중단
+  }
   state.elMeta.set(ownerId, meta);
 
   const isTarget = TARGET_TAGS.has(tag);

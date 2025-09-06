@@ -283,3 +283,38 @@ body {
   min-height: 20px;
   line-height: 1.4;
 }
+
+/* Tab container */
+.tab-container {
+  display: flex;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Individual tab button */
+.tab-button {
+  flex: 1;
+  padding: 12px;
+  cursor: pointer;
+  background-color: transparent;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+  transition: all 0.2s ease-in-out;
+  border-bottom: 2px solid transparent;
+}
+
+/* Active tab button */
+.tab-button.active {
+  color: #007AFF;
+  border-bottom: 2px solid #007AFF;
+  font-weight: 600;
+}
+
+.tab-content {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}

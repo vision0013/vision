@@ -9,10 +9,12 @@
     "activeTab",
     "webNavigation",
     "offscreen",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
-    "https://huggingface.co/*"
+    "https://huggingface.co/*",
+    "https://blog.naver.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -26,7 +28,9 @@
       "js": [
         "content_script.js"
       ],
-      "type": "module"
+      "type": "module",
+      "all_frames": true,
+      "run_at": "document_end"
     }
   ],
   "action": {

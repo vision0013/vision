@@ -18,6 +18,11 @@ export const useSidePanelController = () => {
   // ✨ [신규] 현재 활성화된 요소 상태 관리
   const [activeElementId, setActiveElementId] = useState<number | null>(null);
 
+  // 마크다운 관련 상태
+  const [markdownContent, setMarkdownContent] = useState('');
+  const [pageTitle, setPageTitle] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+
   // 현재 탭의 데이터를 직접 구독하여 탭 변경시 자동 업데이트
   const currentTabData = activeTabId && tabDataMap[activeTabId] 
     ? tabDataMap[activeTabId] 
@@ -80,7 +85,14 @@ export const useSidePanelController = () => {
           setActiveElementId(request.ownerId);
         }
       }
-// ✨ 2. AI 모델 상태 변경 메시지를 처리하는 로직을 추가합니다.
+      // Markdown 결과 수신
+      else if (request.action === 'MARKDOWN_RESULT') {
+        console.log('📝 [panel-controller] Received markdown result');
+        setMarkdownContent(request.markdown);
+        setPageTitle(request.title);
+        setIsExtracting(false);
+      }
+      // ✨ 2. AI 모델 상태 변경 메시지를 처리하는 로직을 추가합니다.
       else if (request.action === 'aiModelStatusChanged') {
         console.log('🔔 [panel-controller] Received AI model status update:', request.status);
         setAiModelStatus(request.status);
@@ -95,7 +107,7 @@ export const useSidePanelController = () => {
       chrome.tabs.onUpdated.removeListener(handleTabUpdated);
       chrome.runtime.onMessage.removeListener(messageListener);
     };
-  }, [setActiveTabId, setAnalysisResult, addAnalysisItems, setAiModelStatus]);
+  }, [setActiveTabId, setAnalysisResult, addAnalysisItems, setAiModelStatus, setMarkdownContent, setPageTitle, setIsExtracting]); // Added markdown related setters to dependencies
 
   const handleItemClick = (ownerId: number) => {
     if (activeTabId) {
@@ -170,6 +182,20 @@ export const useSidePanelController = () => {
     });
   }, []);
 
+  const handleExtract = useCallback(() => {
+    setIsExtracting(true);
+    setMarkdownContent('본문 추출 중...'); // Provide immediate feedback
+    chrome.runtime.sendMessage({ action: 'GET_PAGE_CONTENT' });
+  }, []);
+
+  const handleDownload = useCallback(() => {
+    chrome.runtime.sendMessage({ 
+      action: 'DOWNLOAD_MARKDOWN', 
+      markdown: markdownContent, 
+      title: pageTitle 
+    });
+  }, [markdownContent, pageTitle]);
+
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 
   const exportData = () => {
@@ -198,5 +224,11 @@ export const useSidePanelController = () => {
     recognitionError: error,
     // ✨ [신규] 현재 활성화된 요소 ID
     activeElementId,
+    // Markdown related
+    markdownContent,
+    pageTitle,
+    isExtracting,
+    onExtract: handleExtract,
+    onDownload: handleDownload,
   };
 };

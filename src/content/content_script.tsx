@@ -53,7 +53,7 @@ const runCrawler = async () => {
     dynamicObserverActive = false;
   }
   
-  const analysisResult = pageCrawler.analyze();
+  const analysisResult = await pageCrawler.analyze();
   currentAnalysisResult = analysisResult;
   
   const success = await safeRuntimeMessage({ 
@@ -65,7 +65,7 @@ const runCrawler = async () => {
     startDynamicObserver(pageCrawler, async (newItems: CrawledItem[]) => {
       await safeRuntimeMessage({ 
         action: 'addNewItems', 
-        data: newItems 
+        data: newItems
       });
     });
     dynamicObserverActive = true;
@@ -80,6 +80,42 @@ chrome.runtime.onMessage.addListener(async (request, _sender, _sendResponse) => 
   try {
     if (request.action === 'runCrawler') {
       runCrawler();
+    }
+
+    if (request.action === 'FETCH_MAIN_CONTENT') {
+      const selectors = [
+        '#post-area', // New primary selector based on b.html
+        '.se-main-container',
+        '#postViewArea',
+        'div.se_component_wrap',
+        'article.se_component_wrap',
+        'div.se-viewer',
+        'div.blog_content',
+        'div.post-view',
+        'div.post_content',
+      ];
+
+      let mainContentElement: Element | null = null;
+      for (const selector of selectors) {
+        mainContentElement = document.querySelector(selector); // Always query on main document
+        if (mainContentElement) {
+          break; // Found an element, stop searching
+        }
+      }
+
+      if (mainContentElement) {
+        chrome.runtime.sendMessage({
+          action: 'PROCESS_HTML_TO_MARKDOWN',
+          html: mainContentElement.innerHTML,
+          title: document.title
+        });
+      } else {
+        chrome.runtime.sendMessage({
+          action: 'MARKDOWN_RESULT',
+          markdown: '오류: 네이버 블로그 본문 영역을 찾을 수 없습니다. (시도된 선택자: ' + selectors.join(', ') + ') 다른 블로그거나 구조가 다를 수 있습니다.',
+          title: '추출 오류'
+        });
+      }
     }
     
     

@@ -31,6 +31,7 @@ export const ELEMENT_PRIORITIES: PriorityConfig = {
     'link': 80,       // 링크 5번째
     'text': 60,       // 일반 텍스트 6번째
     'image': 40,      // 이미지 7번째
+    'iframe': 30,     // iframe 8번째
     'container': 20   // 컨테이너 마지막
   },
   
