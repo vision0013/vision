@@ -61,20 +61,35 @@ export const useSidePanelController = () => {
     chrome.tabs.onUpdated.addListener(handleTabUpdated);
     
     const messageListener = (request: any) => {
+      // 🔒 탭 ID 검증: 현재 활성 탭의 데이터만 처리
+      const requestTabId = request.tabId;
+      const currentActiveTabId = activeTabIdRef.current;
+      
       // 기존 전체 업데이트 로직
       if (request.action === 'updatePanelData') {
-        console.log('📨 [SIDE-PANEL] Received updatePanelData with', request.data.items.length, 'items');
-        console.log('📨 [SIDE-PANEL] Current active tab ID:', activeTabIdRef.current);
-        // 현재 활성 탭 ID 전달
-        setAnalysisResult(request.data, activeTabIdRef.current || undefined);
-        console.log('✅ [SIDE-PANEL] Analysis result updated');
+        console.log('📨 [SIDE-PANEL] Received updatePanelData with', request.data.items.length, 'items for tab:', requestTabId);
+        console.log('📨 [SIDE-PANEL] Current active tab ID:', currentActiveTabId);
+        
+        // 탭 ID 검증: 현재 활성 탭의 데이터만 처리
+        if (requestTabId && requestTabId === currentActiveTabId) {
+          setAnalysisResult(request.data, currentActiveTabId || undefined);
+          console.log('✅ [SIDE-PANEL] Analysis result updated for active tab');
+        } else {
+          console.log('🚫 [SIDE-PANEL] Ignored updatePanelData - not from active tab:', requestTabId, 'vs', currentActiveTabId);
+        }
       } 
       
       // 새로운 아이템 추가 로직
       else if (request.action === 'addNewItems') {
-        console.log('🔄 Side Panel: Received', request.data.length, 'new items to add.');
-        // 현재 활성 탭 ID 전달
-        addAnalysisItems(request.data, activeTabIdRef.current || undefined);
+        console.log('🔄 Side Panel: Received', request.data.length, 'new items for tab:', requestTabId);
+        
+        // 탭 ID 검증: 현재 활성 탭의 데이터만 처리
+        if (requestTabId && requestTabId === currentActiveTabId) {
+          addAnalysisItems(request.data, currentActiveTabId || undefined);
+          console.log('✅ [SIDE-PANEL] New items added for active tab');
+        } else {
+          console.log('🚫 [SIDE-PANEL] Ignored addNewItems - not from active tab:', requestTabId, 'vs', currentActiveTabId);
+        }
       }
       
       // ✨ [신규] 중앙 상태 관리에서 활성 요소 변경 알림 수신
