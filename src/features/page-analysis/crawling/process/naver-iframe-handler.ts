@@ -1,6 +1,7 @@
 import { CrawledItem } from '@/types';
 import { CrawlerState } from '../types/crawler-state';
 import { walkElement } from './dom-walking';
+import { coordinateTransformer } from './coordinate-transformer';
 
 /**
  * 네이버 블로그 iframe 처리 (간소화 버전)
@@ -45,7 +46,10 @@ async function processNaverIframe(
     return;
   }
   
-  // 2. 직접 접근 시도
+  // 2. iframe 좌표 변환을 위해 등록
+  coordinateTransformer.registerIframe(iframe);
+
+  // 3. 직접 접근 시도
   const doc = await tryDirectAccess(iframe);
   if (doc && doc.body) {
     console.log('✅ [naver] Direct iframe access successful');

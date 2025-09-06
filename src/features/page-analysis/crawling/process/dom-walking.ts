@@ -3,6 +3,7 @@ import { MAX_NODES, TARGET_TAGS, SKIP_TAGS, IFRAME_TAGS } from '../../crawling/c
 import { CrawlerState } from '../types/crawler-state';
 import { normText } from './text-processing';
 import { isCurrentlyVisible, roleOf, bbox } from './element-analysis';
+import { coordinateTransformer } from './coordinate-transformer';
 
 /**
  * DOM 요소를 재귀적으로 탐색하여 크롤링 아이템을 생성합니다.
@@ -39,10 +40,19 @@ export function walkElement(
   state.elIdMap.set(el, ownerId);
   el.setAttribute('data-crawler-id', ownerId.toString());
 
+  // 좌표 계산 - iframe 내부 요소는 메인 페이지 좌표계로 변환
+  let elementRect = bbox(el);
+  if (coordinateTransformer.needsTransformation(el)) {
+    const parentIframe = coordinateTransformer.findParentIframe(el);
+    if (parentIframe) {
+      elementRect = coordinateTransformer.transformIframeElementCoordinates(el, parentIframe);
+    }
+  }
+
   const meta = {
     tag,
     role: roleOf(el),
-    rect: bbox(el),
+    rect: elementRect,
     parentId: parentElId,
   };
 

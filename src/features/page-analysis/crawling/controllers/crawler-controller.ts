@@ -3,11 +3,16 @@ import { CrawlerState } from '../types/crawler-state';
 import { createCrawlerState, updateVisibility } from '../process/state-management';
 import { walkElement, removeDuplicates } from '../process/dom-walking';
 import { processNaverIframes } from '../process/naver-iframe-handler';
+import { coordinateTransformer } from '../process/coordinate-transformer';
 
 let globalState: CrawlerState | null = null;
 
 export async function analyze(): Promise<AnalysisResult> {
   const T0 = performance.now();
+  
+  // 좌표 변환기 초기화
+  coordinateTransformer.clear();
+  
   const state = createCrawlerState();
   globalState = state;
   
