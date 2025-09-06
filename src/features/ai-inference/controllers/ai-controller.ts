@@ -18,7 +18,7 @@ export interface LearningSnapshot {
   description?: string;
 }
 
-// OPFS 설정 (IndexedDB 제거, OPFS만 사용)
+// OPFS 설정
 const MODEL_KEY = 'gemma3-4b-it-int4';
 const MODEL_FILE_NAME = `${MODEL_KEY}.bin`;
 const LEARNED_EXAMPLES_FILE_NAME = 'learned-examples.json';

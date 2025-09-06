@@ -46,3 +46,4 @@ export interface AnalysisComparison {
   processingTime: number;
   finalResult: any; // 최종 선택된 분석 결과
 }
+
