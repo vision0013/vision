@@ -44,6 +44,7 @@ export class AIController {
   // ✨ 다중 모델 지원
   private currentModelId: string = DEFAULT_MODEL_ID;
   private downloadProgress: ModelDownloadProgress | null = null;
+  private downloadAbortController: AbortController | null = null;
   private readonly fullConfig: AIModelConfig;
 
   // ✨ 프롬프트 관리 - CURRENT_PROMPT 기반으로 초기화
@@ -191,9 +192,9 @@ export class AIController {
     this.modelStatus = { state: 2, currentModelId: targetModelId }; // 로딩 중
     
     // AbortController로 긴 다운로드 타임아웃 제어
-    const controller = new AbortController();
+    this.downloadAbortController = new AbortController();
     const downloadTimeout = setTimeout(() => {
-      controller.abort();
+      this.downloadAbortController?.abort();
       console.error('❌ [ai-controller] Download timeout after 10 minutes');
     }, 10 * 60 * 1000); // 10분 타임아웃
 
@@ -218,7 +219,7 @@ export class AIController {
 
       const response = await fetch(modelPath, {
         headers,
-        signal: controller.signal
+        signal: this.downloadAbortController!.signal
       });
 
       // 타임아웃 해제
@@ -249,6 +250,7 @@ export class AIController {
       const { writable } = await this.createOPFSFileWriter(targetModelId);
       let receivedLength = 0;
       let lastProgressUpdate = 0;
+      let lastLogTime = 0;
 
       try {
         while (true) {
@@ -261,21 +263,23 @@ export class AIController {
 
           // 실시간 진행률 업데이트
           const currentProgress = contentLength > 0 ? Math.floor((receivedLength / contentLength) * 100) : 0;
+          const currentTime = Date.now();
 
           if (this.downloadProgress) {
             this.downloadProgress.downloadedBytes = receivedLength;
             this.downloadProgress.progress = currentProgress;
 
-            // UI에 실시간 진행률 전송 (5%마다 또는 50MB마다)
-            if (currentProgress - lastProgressUpdate >= 5 || receivedLength % (50 * 1024 * 1024) < value.length) {
+            // UI에 실시간 진행률 전송 (1%마다)
+            if (currentProgress - lastProgressUpdate >= 1) {
               this.broadcastDownloadProgress();
               lastProgressUpdate = currentProgress;
             }
           }
 
-          // 로그 출력 (진행률 전송과 동시)
-          if (currentProgress - (lastProgressUpdate - 5) >= 5 || receivedLength % (50 * 1024 * 1024) < value.length) {
+          // 로그 출력 (1초마다만)
+          if (currentTime - lastLogTime >= 1000) {
             console.log(`📊 [ai-controller] Download progress: ${(receivedLength / 1024 / 1024).toFixed(1)}MB / ${(contentLength / 1024 / 1024).toFixed(1)}MB (${currentProgress}%)`);
+            lastLogTime = currentTime;
           }
         }
 
@@ -296,7 +300,10 @@ export class AIController {
           currentModelId: targetModelId
         };
         console.log(`✅ [ai-controller] Model ${modelInfo.name} download complete and ready to load`);
-        
+
+        // AbortController 정리
+        this.downloadAbortController = null;
+
         return true;
         
       } catch (writeError) {
@@ -327,8 +334,16 @@ export class AIController {
       }
 
       if (error.name === 'AbortError') {
-        console.error('❌ [ai-controller] Download aborted due to timeout (10 minutes)');
-        this.modelStatus = { state: 1, currentModelId: targetModelId, error: 'Download timeout after 10 minutes' };
+        console.error('❌ [ai-controller] Download aborted (timeout or user cancellation)');
+        this.modelStatus = { state: 1, currentModelId: targetModelId, error: 'Download cancelled' };
+
+        // 불완전한 파일 정리
+        try {
+          await this.deleteCachedModel(targetModelId);
+          console.log('🗑️ [ai-controller] Incomplete download file cleaned up');
+        } catch (cleanupError) {
+          console.warn('⚠️ [ai-controller] Failed to cleanup incomplete file:', cleanupError);
+        }
       } else if (error.message.includes('Failed to fetch')) {
         const errorMsg = modelInfo.requiresToken
           ? 'Network error. Check your internet connection or Hugging Face token.'
@@ -339,7 +354,29 @@ export class AIController {
         console.error(`❌ [ai-controller] Failed to download ${modelInfo.name}:`, error);
         this.modelStatus = { state: 1, currentModelId: targetModelId, error: error.message };
       }
+
+      // 에러 발생 시 AbortController 정리
+      this.downloadAbortController = null;
       return false;
+    }
+  }
+
+  /**
+   * 다운로드 취소
+   */
+  public cancelDownload(): void {
+    if (this.downloadAbortController) {
+      console.log('🚫 [ai-controller] Cancelling download...');
+      this.downloadAbortController.abort();
+
+      // 다운로드 진행률 취소 상태 업데이트
+      if (this.downloadProgress) {
+        this.downloadProgress.status = 'error';
+        this.downloadProgress.error = 'Download cancelled by user';
+        this.broadcastDownloadProgress();
+      }
+    } else {
+      console.warn('⚠️ [ai-controller] No download to cancel');
     }
   }
   

@@ -1,7 +1,7 @@
 // 메시지 라우팅 시스템 - 각 메시지를 적절한 핸들러로 전달
 
 import { BackgroundMessage, MessageHandler } from '../types/background-types';
-import { handleAIMessage, handleGetAvailableModels, handleGetAllModelsStatus, handleGetDownloadProgress, handleSwitchModel, handleMultiModelDownload, handleMultiModelDelete } from './ai-message-handler';
+import { handleAIMessage, handleGetAvailableModels, handleGetAllModelsStatus, handleGetDownloadProgress, handleSwitchModel, handleMultiModelDownload, handleMultiModelDelete, handleCancelDownload } from './ai-message-handler';
 import { handleVoiceCommand } from './voice-command-handler';
 import { handleHighlightMessage } from './highlight-message-handler';
 import { handleCrawlComplete, handleAddNewItems } from './crawl-message-handler';
@@ -44,6 +44,7 @@ export class MessageRouter {
     this.handlers.set('getAllModelsStatus', () => handleGetAllModelsStatus());
     this.handlers.set('getDownloadProgress', () => handleGetDownloadProgress());
     this.handlers.set('switchAIModel', (msg) => handleSwitchModel(msg.modelId, msg.token));
+    this.handlers.set('cancelDownload', () => handleCancelDownload());
     this.handlers.set('downloadAIModel', (msg) => {
       // 다중 모델 지원인지 확인
       if (msg.modelId) {

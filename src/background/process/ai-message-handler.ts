@@ -113,7 +113,8 @@ function mapBackgroundActionToOffscreen(action: string): string {
     'switchAIModel': 'switchModel',
     'getAvailableModels': 'getAvailableModels',
     'getAllModelsStatus': 'getAllModelsStatus',
-    'getDownloadProgress': 'getDownloadProgress'
+    'getDownloadProgress': 'getDownloadProgress',
+    'cancelDownload': 'cancelDownload'
   };
 
   return actionMap[action] || action;
@@ -141,7 +142,8 @@ function mapBackgroundActionToResponse(action: string): string {
     'switchAIModel': 'modelSwitched',
     'getAvailableModels': 'availableModelsResponse',
     'getAllModelsStatus': 'allModelsStatusResponse',
-    'getDownloadProgress': 'downloadProgressResponse'
+    'getDownloadProgress': 'downloadProgressResponse',
+    'cancelDownload': 'downloadCancelled'
   };
 
   return responseMap[action] || 'modelStatusResponse';
@@ -304,6 +306,29 @@ export async function handleMultiModelDelete(modelId?: string): Promise<any> {
     };
   } catch (error: any) {
     console.error(`❌ [ai-handler] Failed to delete model ${modelId}:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 다운로드 취소 처리
+ */
+export async function handleCancelDownload(): Promise<any> {
+  try {
+    console.log('🚫 [ai-handler] Cancelling download...');
+
+    const aiController = getAIController();
+    aiController.cancelDownload();
+
+    return {
+      success: true,
+      message: 'Download cancelled successfully'
+    };
+  } catch (error: any) {
+    console.error('❌ [ai-handler] Failed to cancel download:', error);
     return {
       success: false,
       error: error.message

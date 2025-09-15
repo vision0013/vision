@@ -45,6 +45,27 @@ export const AVAILABLE_MODELS: AvailableModels = {
     }
   },
 
+  'gemma3-12b-it': {
+    id: 'gemma3-12b-it',
+    name: 'Gemma 3 12B IT',
+    description: '12B 파라미터 고성능 대형 모델 (8GB+ VRAM 필요)',
+    modelPath: 'https://huggingface.co/litert-community/Gemma3-12B-IT/resolve/main/gemma3-12b-it-int4-web.task',
+    size: '7.55GB',
+    requiresToken: true,
+    quantization: 'int4',
+    category: 'large',
+    defaultConfig: {
+      maxTokens: 4096,
+      temperature: 0.05,
+      topK: 40,
+      randomSeed: 42
+    },
+    performance: {
+      avgResponseTime: 500,
+      memoryUsage: '7.55GB'
+    }
+  },
+
 };
 
 export const DEFAULT_MODEL_ID = 'gemma3-4b-it';
