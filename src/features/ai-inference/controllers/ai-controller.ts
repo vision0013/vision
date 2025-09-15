@@ -482,6 +482,21 @@ export class AIController {
   }
 
   /**
+   * 현재 모델이 메모리에 로드되어 사용 가능한지 확인
+   */
+  public isModelLoaded(): boolean {
+    return this.modelStatus.state === 3 && this.llm !== null;
+  }
+
+  /**
+   * 현재 모델이 캐시되어 있어 로드 가능한지 확인
+   */
+  public async isModelCached(modelId?: string): Promise<boolean> {
+    const targetModelId = modelId || this.currentModelId;
+    return await OPFSFileManager.checkModelExists(targetModelId);
+  }
+
+  /**
    * 다운로드 진행률 반환
    */
   public getDownloadProgress(): ModelDownloadProgress | null {
@@ -511,7 +526,7 @@ export class AIController {
   /**
    * 모델 전환 (기존 모델 언로드 후 새 모델 로드)
    */
-  public async switchModel(modelId: string, token?: string): Promise<boolean> {
+  public async switchModel(modelId: string, token?: string, autoLoad: boolean = false): Promise<boolean> {
     const modelInfo = AVAILABLE_MODELS[modelId];
     if (!modelInfo) {
       console.error(`❌ [ai-controller] Unknown model ID: ${modelId}`);
@@ -539,9 +554,25 @@ export class AIController {
     // 모델이 이미 다운로드되어 있는지 확인
     const modelExists = await OPFSFileManager.checkModelExists(modelId);
     if (modelExists) {
-      console.log(`✅ [ai-controller] Model ${modelId} found in cache, ready to load`);
-      this.modelStatus.state = 4; // 캐시됨, 로드 필요
-      return true;
+      console.log(`✅ [ai-controller] Model ${modelId} found in cache`);
+
+      if (autoLoad) {
+        // 자동 로드 요청시 바로 메모리에 로드
+        console.log(`🚀 [ai-controller] Auto-loading model ${modelId} into memory...`);
+        const loadSuccess = await this.initialize();
+        if (loadSuccess) {
+          console.log(`✅ [ai-controller] Model ${modelId} successfully loaded and ready for use`);
+          return true;
+        } else {
+          console.error(`❌ [ai-controller] Failed to load model ${modelId}`);
+          return false;
+        }
+      } else {
+        // 캐시됨, 로드 필요 상태로 설정
+        this.modelStatus.state = 4;
+        console.log(`📦 [ai-controller] Model ${modelId} ready to load (call initialize() to load into memory)`);
+        return true;
+      }
     }
 
     // 모델이 없으면 다운로드 필요
@@ -553,7 +584,15 @@ export class AIController {
 
     // 모델 다운로드
     console.log(`📥 [ai-controller] Downloading model ${modelId}...`);
-    return this.downloadAndCacheModel(token || '', modelId);
+    const downloadSuccess = await this.downloadAndCacheModel(token || '', modelId);
+
+    if (downloadSuccess && autoLoad) {
+      // 다운로드 성공 후 자동 로드
+      console.log(`🚀 [ai-controller] Auto-loading downloaded model ${modelId}...`);
+      return await this.initialize();
+    }
+
+    return downloadSuccess;
   }
 
   /**
