@@ -1,7 +1,7 @@
 // 메시지 라우팅 시스템 - 각 메시지를 적절한 핸들러로 전달
 
 import { BackgroundMessage, MessageHandler } from '../types/background-types';
-import { handleAIMessage } from './ai-message-handler';
+import { handleAIMessage, handleGetAvailableModels, handleGetAllModelsStatus, handleGetDownloadProgress, handleSwitchModel, handleMultiModelDownload, handleMultiModelDelete } from './ai-message-handler';
 import { handleVoiceCommand } from './voice-command-handler';
 import { handleHighlightMessage } from './highlight-message-handler';
 import { handleCrawlComplete, handleAddNewItems } from './crawl-message-handler';
@@ -21,11 +21,9 @@ export class MessageRouter {
    * 핸들러 맵 초기화
    */
   private initializeHandlers(): void {
-    // AI 관련 메시지들
+    // AI 관련 메시지들 (기존)
     const aiActions = [
-      'getAIModelStatus', 
-      'deleteAIModel', 
-      'downloadAIModel', 
+      'getAIModelStatus',
       'initializeAI',
       'loadAIModel',
       'testAIAnalysis',
@@ -39,6 +37,30 @@ export class MessageRouter {
     ];
     aiActions.forEach(action => {
       this.handlers.set(action, handleAIMessage);
+    });
+
+    // 다중 모델 지원 메시지들 (새로운 핸들러)
+    this.handlers.set('getAvailableModels', () => handleGetAvailableModels());
+    this.handlers.set('getAllModelsStatus', () => handleGetAllModelsStatus());
+    this.handlers.set('getDownloadProgress', () => handleGetDownloadProgress());
+    this.handlers.set('switchAIModel', (msg) => handleSwitchModel(msg.modelId, msg.token));
+    this.handlers.set('downloadAIModel', (msg) => {
+      // 다중 모델 지원인지 확인
+      if (msg.modelId) {
+        return handleMultiModelDownload(msg.modelId, msg.token);
+      } else {
+        // 기존 방식: Offscreen으로 전달
+        return handleAIMessage(msg);
+      }
+    });
+    this.handlers.set('deleteAIModel', (msg) => {
+      // 다중 모델 지원인지 확인
+      if (msg.modelId) {
+        return handleMultiModelDelete(msg.modelId);
+      } else {
+        // 기존 방식: Offscreen으로 전달
+        return handleAIMessage(msg);
+      }
     });
 
     // 음성 명령

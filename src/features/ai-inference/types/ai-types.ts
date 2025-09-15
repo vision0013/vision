@@ -24,8 +24,39 @@ export interface AIModelConfig {
   randomSeed?: number;
 }
 
+// 다중 모델 지원을 위한 새로운 인터페이스들
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description: string;
+  modelPath: string;
+  size: string; // "4.8GB", "2.4GB" 등
+  requiresToken: boolean;
+  quantization: 'int4' | 'int8' | 'float16';
+  defaultConfig: AIModelConfig;
+  category: 'small' | 'medium' | 'large';
+  performance: {
+    avgResponseTime: number; // ms
+    memoryUsage: string;
+  };
+}
+
+export interface AvailableModels {
+  [key: string]: ModelInfo;
+}
+
+export interface ModelDownloadProgress {
+  modelId: string;
+  progress: number; // 0-100
+  downloadedBytes: number;
+  totalBytes: number;
+  status: 'downloading' | 'processing' | 'completed' | 'error';
+  error?: string;
+}
+
 export interface AIModelStatus {
   state: 1 | 2 | 3 | 4; // 1: 캐시없음, 2: 로딩중, 3: 로딩완료, 4: 캐시있음(로드안됨)
+  currentModelId?: string; // 현재 로드된 모델 ID
   error?: string;
   modelSize?: number;
   loadTime?: number;
@@ -34,6 +65,9 @@ export interface AIModelStatus {
 // AI 추론 상태 관리
 export interface AIInferenceState {
   model: AIModelStatus;
+  availableModels: AvailableModels;
+  selectedModelId: string;
+  downloadProgress?: ModelDownloadProgress;
   lastAnalysis?: AIAnalysisResult;
   analysisHistory: AIAnalysisResult[];
 }

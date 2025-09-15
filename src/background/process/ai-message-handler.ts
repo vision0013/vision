@@ -1,7 +1,8 @@
-// AI 관련 메시지 처리 핸들러 (Offscreen 중계)
+// AI 관련 메시지 처리 핸들러 (Offscreen 중계) - 다중 모델 지원
 
 import { AIMessageRequest } from '../types/background-types';
 import { offscreenManager } from '../controllers/managers/offscreen-manager';
+import { getAIController } from '../../features/ai-inference/controllers/ai-controller';
 
 // 요청 ID용 카운터 (타임스탬프와 결합하여 고유성 보장)
 let requestCounter = 0;
@@ -90,7 +91,7 @@ export async function handleAIMessage(
 }
 
 /**
- * Background 액션명을 Offscreen 액션명으로 변환
+ * Background 액션명을 Offscreen 액션명으로 변환 (다중 모델 지원)
  */
 function mapBackgroundActionToOffscreen(action: string): string {
   const actionMap: Record<string, string> = {
@@ -106,14 +107,19 @@ function mapBackgroundActionToOffscreen(action: string): string {
     'createSnapshot': 'createSnapshot', // 스냅샷 생성
     'getSnapshots': 'getSnapshots', // 스냅샷 목록
     'rollbackSnapshot': 'rollbackSnapshot', // 스냅샷 복원
-    'deleteSnapshot': 'deleteSnapshot' // 스냅샷 삭제
+    'deleteSnapshot': 'deleteSnapshot', // 스냅샷 삭제
+    // 다중 모델 지원 새 액션들
+    'switchAIModel': 'switchModel',
+    'getAvailableModels': 'getAvailableModels',
+    'getAllModelsStatus': 'getAllModelsStatus',
+    'getDownloadProgress': 'getDownloadProgress'
   };
-  
+
   return actionMap[action] || action;
 }
 
 /**
- * Background 액션명을 기대하는 응답 액션명으로 변환
+ * Background 액션명을 기대하는 응답 액션명으로 변환 (다중 모델 지원)
  */
 function mapBackgroundActionToResponse(action: string): string {
   const responseMap: Record<string, string> = {
@@ -129,8 +135,164 @@ function mapBackgroundActionToResponse(action: string): string {
     'createSnapshot': 'snapshotCreated', // 스냅샷 생성 완료
     'getSnapshots': 'snapshotsResponse', // 스냅샷 목록 응답
     'rollbackSnapshot': 'rollbackCompleted', // 롤백 완료 응답
-    'deleteSnapshot': 'snapshotDeleted' // 스냅샷 삭제 완료
+    'deleteSnapshot': 'snapshotDeleted', // 스냅샷 삭제 완룼
+    // 다중 모델 지원 새 응답들
+    'switchAIModel': 'modelSwitched',
+    'getAvailableModels': 'availableModelsResponse',
+    'getAllModelsStatus': 'allModelsStatusResponse',
+    'getDownloadProgress': 'downloadProgressResponse'
   };
-  
+
   return responseMap[action] || 'modelStatusResponse';
+}
+
+// =============================================================================
+// 🌐 다중 모델 지원 핸들러들
+// =============================================================================
+
+/**
+ * 사용 가능한 모델 목록 및 현재 모델 반환
+ */
+export async function handleGetAvailableModels(): Promise<any> {
+  try {
+    const aiController = getAIController();
+    return {
+      success: true,
+      models: aiController.getAvailableModels(),
+      currentModelId: aiController.getCurrentModelId()
+    };
+  } catch (error: any) {
+    console.error('❌ [ai-handler] Failed to get available models:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 모든 모델의 상태 조회
+ */
+export async function handleGetAllModelsStatus(): Promise<any> {
+  try {
+    const aiController = getAIController();
+    const states = await aiController.getAllModelsStatus();
+    return {
+      success: true,
+      states
+    };
+  } catch (error: any) {
+    console.error('❌ [ai-handler] Failed to get all models status:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 다운로드 진행률 조회
+ */
+export async function handleGetDownloadProgress(): Promise<any> {
+  try {
+    const aiController = getAIController();
+    const progress = aiController.getDownloadProgress();
+    return {
+      success: true,
+      progress
+    };
+  } catch (error: any) {
+    console.error('❌ [ai-handler] Failed to get download progress:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 모델 전환 처리
+ */
+export async function handleSwitchModel(modelId: string, token?: string): Promise<any> {
+  try {
+    console.log(`🔄 [ai-handler] Switching to model: ${modelId}`);
+    const aiController = getAIController();
+    const success = await aiController.switchModel(modelId, token);
+
+    if (success) {
+      return {
+        success: true,
+        modelId,
+        message: 'Model switched successfully'
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Model switch failed'
+      };
+    }
+  } catch (error: any) {
+    console.error(`❌ [ai-handler] Failed to switch to model ${modelId}:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 다중 모델 지원 다운로드 처리
+ */
+export async function handleMultiModelDownload(modelId?: string, token?: string): Promise<any> {
+  try {
+    console.log(`📥 [ai-handler] Starting download for model: ${modelId || 'default'}`);
+
+    // modelId가 지정된 경우, 해당 모델용 컸트롤러 생성
+    const aiController = modelId ? getAIController(modelId) : getAIController();
+
+    let success: boolean;
+    if (modelId && aiController.getCurrentModelId() !== modelId) {
+      // 다른 모델로 전환 후 다운로드
+      success = await aiController.switchModel(modelId, token);
+    } else {
+      // 현재 모델 다운로드
+      success = await aiController.downloadAndCacheModel(token || '', modelId);
+    }
+
+    return {
+      success,
+      modelId: aiController.getCurrentModelId(),
+      message: success ? 'Download started successfully' : 'Download failed to start'
+    };
+  } catch (error: any) {
+    console.error(`❌ [ai-handler] Failed to start download for model ${modelId}:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * 다중 모델 지원 삭제 처리
+ */
+export async function handleMultiModelDelete(modelId?: string): Promise<any> {
+  try {
+    console.log(`🗑️ [ai-handler] Deleting model: ${modelId || 'current'}`);
+
+    const aiController = getAIController();
+    await aiController.deleteCachedModel(modelId);
+
+    return {
+      success: true,
+      modelId: modelId || aiController.getCurrentModelId(),
+      message: 'Model deleted successfully'
+    };
+  } catch (error: any) {
+    console.error(`❌ [ai-handler] Failed to delete model ${modelId}:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
