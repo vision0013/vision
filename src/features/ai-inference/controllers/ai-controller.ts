@@ -265,12 +265,17 @@ export class AIController {
           if (this.downloadProgress) {
             this.downloadProgress.downloadedBytes = receivedLength;
             this.downloadProgress.progress = currentProgress;
+
+            // UI에 실시간 진행률 전송 (5%마다 또는 50MB마다)
+            if (currentProgress - lastProgressUpdate >= 5 || receivedLength % (50 * 1024 * 1024) < value.length) {
+              this.broadcastDownloadProgress();
+              lastProgressUpdate = currentProgress;
+            }
           }
 
-          // 5% 또는 50MB마다 로그 출력 (너무 빈번한 로그 방지)
-          if (currentProgress - lastProgressUpdate >= 5 || receivedLength % (50 * 1024 * 1024) < value.length) {
+          // 로그 출력 (진행률 전송과 동시)
+          if (currentProgress - (lastProgressUpdate - 5) >= 5 || receivedLength % (50 * 1024 * 1024) < value.length) {
             console.log(`📊 [ai-controller] Download progress: ${(receivedLength / 1024 / 1024).toFixed(1)}MB / ${(contentLength / 1024 / 1024).toFixed(1)}MB (${currentProgress}%)`);
-            lastProgressUpdate = currentProgress;
           }
         }
 
@@ -282,6 +287,7 @@ export class AIController {
         if (this.downloadProgress) {
           this.downloadProgress.progress = 100;
           this.downloadProgress.status = 'completed';
+          this.broadcastDownloadProgress(); // 완료 상태 전송
         }
 
         // 다운로드 완료 상태로 업데이트 (로드하지 않음)
@@ -299,6 +305,7 @@ export class AIController {
         if (this.downloadProgress) {
           this.downloadProgress.status = 'error';
           this.downloadProgress.error = 'Write failed';
+          this.broadcastDownloadProgress(); // 에러 상태 전송
         }
         throw writeError;
       }
@@ -316,6 +323,7 @@ export class AIController {
       if (this.downloadProgress) {
         this.downloadProgress.status = 'error';
         this.downloadProgress.error = error.message;
+        this.broadcastDownloadProgress(); // 에러 상태 전송
       }
 
       if (error.name === 'AbortError') {
@@ -1097,6 +1105,26 @@ export class AIController {
    */
   public getDownloadProgress(): ModelDownloadProgress | null {
     return this.downloadProgress;
+  }
+
+  /**
+   * 다운로드 진행률을 UI로 실시간 전송
+   */
+  private broadcastDownloadProgress(): void {
+    if (!this.downloadProgress) return;
+
+    try {
+      // Background Script를 통해 UI로 메시지 전송
+      chrome.runtime.sendMessage({
+        action: 'downloadProgress',
+        progress: { ...this.downloadProgress }
+      }).catch((error) => {
+        // 메시지 전송 실패는 조용히 무시 (메인 다운로드에 영향 없음)
+        console.warn('⚠️ [ai-controller] Failed to broadcast download progress:', error);
+      });
+    } catch (error) {
+      console.warn('⚠️ [ai-controller] Failed to broadcast download progress:', error);
+    }
   }
 
   /**

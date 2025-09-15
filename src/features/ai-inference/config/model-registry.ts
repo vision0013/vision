@@ -28,20 +28,20 @@ export const AVAILABLE_MODELS: AvailableModels = {
     id: 'phi-4-mini',
     name: 'Phi-4 Mini Instruct',
     description: '소형 고효율 모델 (인증 불필요)',
-    modelPath: 'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/main/phi-4-mini-instruct-int4-web.task',
-    size: '1.8GB',
+    modelPath: 'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/main/phi4_q8_ekv1280.task',
+    size: '3.9GB',
     requiresToken: false,
-    quantization: 'int4',
-    category: 'small',
+    quantization: 'int8',
+    category: 'medium',
     defaultConfig: {
-      maxTokens: 2048,
+      maxTokens: 1280,
       temperature: 0.1,
       topK: 50,
       randomSeed: 42
     },
     performance: {
       avgResponseTime: 280,
-      memoryUsage: '1.8GB'
+      memoryUsage: '3.9GB'
     }
   },
 

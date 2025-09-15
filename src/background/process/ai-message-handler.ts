@@ -3,6 +3,7 @@
 import { AIMessageRequest } from '../types/background-types';
 import { offscreenManager } from '../controllers/managers/offscreen-manager';
 import { getAIController } from '../../features/ai-inference/controllers/ai-controller';
+import { AVAILABLE_MODELS } from '../../features/ai-inference/config/model-registry';
 
 // 요청 ID용 카운터 (타임스탬프와 결합하여 고유성 보장)
 let requestCounter = 0;
@@ -220,6 +221,19 @@ export async function handleSwitchModel(modelId: string, token?: string): Promis
     const success = await aiController.switchModel(modelId, token);
 
     if (success) {
+      // UI에 모델 전환 알림 전송
+      try {
+        chrome.runtime.sendMessage({
+          action: 'modelSwitched',
+          modelId: modelId,
+          modelName: AVAILABLE_MODELS[modelId]?.name || modelId
+        }).catch(() => {
+          // 메시지 전송 실패는 조용히 무시
+        });
+      } catch (error) {
+        console.warn('⚠️ [ai-handler] Failed to notify model switch:', error);
+      }
+
       return {
         success: true,
         modelId,

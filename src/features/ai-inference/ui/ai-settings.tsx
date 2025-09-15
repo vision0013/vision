@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSidePanelStore } from '../../side-panel-management/process/panel-store';
 import { AI_TEST_SETS, AITestSetKey, AITestResult, AITestSummary } from '../config/test-cases';
 import { ModelSelector } from './model-selector';
+import { DownloadProgressModal } from './download-progress-modal';
 import { AvailableModels, ModelDownloadProgress } from '../types/ai-types';
 
 interface LearningSnapshot {
@@ -129,10 +130,12 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         // 다운로드 진행률 업데이트
         if (message.action === 'downloadProgress') {
           setDownloadProgress(message.progress);
+          console.log('📥 [ai-settings] Download progress updated:', message.progress);
         }
 
         // 모델 전환 완료
         if (message.action === 'modelSwitched') {
+          console.log(`🔄 [ai-settings] Model switched notification: ${message.modelId}`);
           setCurrentModelId(message.modelId);
           loadModelData(); // 상태 새로고침
         }
@@ -147,14 +150,34 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
   // 다중 모델 지원 핸들러들
   const handleModelSwitch = async (modelId: string, token?: string) => {
     try {
-      await chrome.runtime.sendMessage({
+      console.log(`🔄 [ai-settings] Switching to model: ${modelId}`);
+
+      const response = await chrome.runtime.sendMessage({
         action: 'switchAIModel',
         modelId,
         token
       });
+
+      if (response.success) {
+        // 즉시 UI 업데이트
+        setCurrentModelId(modelId);
+        console.log(`✅ [ai-settings] Model switched to: ${availableModels[modelId]?.name}`);
+
+        // 상태 데이터 새로고침
+        setTimeout(() => {
+          loadModelData();
+        }, 500);
+
+        // 성공 메시지 표시
+        alert(`✅ 모델이 성공적으로 전환되었습니다!
+
+새 모델: ${availableModels[modelId]?.name}`);
+      } else {
+        throw new Error(response.error || '모델 전환에 실패했습니다');
+      }
     } catch (error: any) {
       console.error('❌ [ai-settings] Model switch failed:', error);
-      alert(`모델 전환 실패: ${error.message}`);
+      alert(`❌ 모델 전환 실패: ${error.message}`);
     }
   };
 
@@ -520,25 +543,75 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
               />
             ) : (
               <div className="current-model-summary" style={{
-                padding: '15px',
-                backgroundColor: '#f8f9fa',
+                padding: '20px',
+                backgroundColor: currentModelId ? '#e8f5e8' : '#f8f9fa',
                 borderRadius: '8px',
-                border: '1px solid #dee2e6'
+                border: `2px solid ${currentModelId ? '#28a745' : '#dee2e6'}`,
+                position: 'relative'
               }}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <div>
-                    <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '5px'}}>
-                      {availableModels[currentModelId]?.name || '모델 없음'}
-                    </div>
-                    <div style={{fontSize: '12px', color: '#666'}}>
-                      {availableModels[currentModelId]?.description || '선택된 모델이 없습니다'}
-                    </div>
+                {/* 현재 모델 배지 */}
+                {currentModelId && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    left: '15px',
+                    backgroundColor: '#28a745',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}>
+                    ✅ 현재 모델
                   </div>
-                  {downloadProgress && downloadProgress.status === 'downloading' && (
-                    <div style={{fontSize: '12px', color: '#007bff'}}>
-                      ⏳ {downloadProgress.progress}%
+                )}
+
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <div style={{flex: 1}}>
+                    <div style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: '#333'}}>
+                      {availableModels[currentModelId]?.name || '모델이 선택되지 않음'}
                     </div>
-                  )}
+                    <div style={{fontSize: '13px', color: '#666', marginBottom: '8px'}}>
+                      {availableModels[currentModelId]?.description || '사용 가능한 모델을 선택하고 다운로드해주세요'}
+                    </div>
+                    {currentModelId && availableModels[currentModelId] && (
+                      <div style={{fontSize: '12px', color: '#555'}}>
+                        <span style={{marginRight: '15px'}}>
+                          💾 크기: {availableModels[currentModelId].size}
+                        </span>
+                        <span style={{marginRight: '15px'}}>
+                          ⚡ 양자화: {availableModels[currentModelId].quantization}
+                        </span>
+                        <span>
+                          {availableModels[currentModelId].requiresToken ? '🔑 인증 필요' : '🔓 인증 불필요'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 우측 상태 인디케이터 */}
+                  <div style={{textAlign: 'center'}}>
+                    {downloadProgress && downloadProgress.status === 'downloading' && (
+                      <div style={{fontSize: '14px', color: '#007bff', fontWeight: 'bold'}}>
+                        📥 {downloadProgress.progress}%
+                      </div>
+                    )}
+                    {aiModelStatus.state === 3 && currentModelId && (
+                      <div style={{fontSize: '14px', color: '#28a745', fontWeight: 'bold'}}>
+                        🚀 로드 완료
+                      </div>
+                    )}
+                    {aiModelStatus.state === 4 && currentModelId && (
+                      <div style={{fontSize: '14px', color: '#ffc107', fontWeight: 'bold'}}>
+                        📦 로드 대기
+                      </div>
+                    )}
+                    {!currentModelId && (
+                      <div style={{fontSize: '14px', color: '#dc3545', fontWeight: 'bold'}}>
+                        ❌ 모델 없음
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -776,6 +849,19 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
             </div>
           )}
         </div>
+
+        {/* 다운로드 진행률 모달 */}
+        {downloadProgress && downloadProgress.status === 'downloading' && (
+          <DownloadProgressModal
+            downloadProgress={downloadProgress}
+            availableModels={availableModels}
+            onCancel={() => {
+              // 다운로드 취소 요청
+              chrome.runtime.sendMessage({ action: 'cancelDownload' });
+              setDownloadProgress(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
