@@ -4,7 +4,7 @@
  */
 
 // ✨ [수정] 개별 액션 함수 대신, 모든 것을 관장하는 processVoiceCommand 함수를 내보냅니다.
-export { processVoiceCommand } from './controllers/voice-controller';
+export { processVoiceCommand, processAIVoiceCommand } from './controllers/voice-controller';
 
 // ✨ [수정] 개별 액션 함수들은 더 이상 외부로 직접 노출할 필요가 없으므로 주석 처리하거나 삭제합니다.
 /*

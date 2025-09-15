@@ -1,6 +1,6 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
-import { processVoiceCommand } from '../features/voice-commands';
+import { processVoiceCommand, processAIVoiceCommand } from '../features/voice-commands';
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
 import { AnalysisResult, CrawledItem } from '@/types';
 
@@ -11,7 +11,7 @@ let dynamicObserverActive = false;
 // ✨ [개선] executeVoiceAction 함수를 processVoiceCommand 호출로 대체
 function executeVoiceAction(request: any, items: CrawledItem[]) {
   const { detectedAction, targetText, originalCommand, direction } = request;
-  
+
   // ✨ [개선] payload 객체로 묶어서 전달
   const result = processVoiceCommand({
     detectedAction,
@@ -20,8 +20,22 @@ function executeVoiceAction(request: any, items: CrawledItem[]) {
     originalCommand,
     items
   });
-  
+
   console.log('🎯 [content] Action result:', result);
+}
+
+// 🤖 AI 기반 음성 명령 실행 함수 (신규)
+async function executeAIVoiceAction(userInput: string, items: CrawledItem[]) {
+  console.log('🤖 [content] Executing AI voice command:', userInput);
+
+  try {
+    const results = await processAIVoiceCommand(userInput, items);
+    console.log('✅ [content] AI command completed:', results);
+    return results;
+  } catch (error) {
+    console.error('❌ [content] AI command failed:', error);
+    throw error;
+  }
 }
 
 const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {
@@ -139,6 +153,23 @@ chrome.runtime.onMessage.addListener(async (request, _sender, _sendResponse) => 
         executeVoiceAction(request, currentAnalysisResult.items);
       } else {
         console.log('❌ No analysis data available');
+      }
+    }
+
+    // 🤖 AI 기반 음성 명령 처리 (신규)
+    if (request.action === 'processAIVoiceCommand') {
+      console.log('🤖 [content] Processing AI voice command:', request.userInput);
+      if (currentAnalysisResult?.items) {
+        try {
+          const results = await executeAIVoiceAction(request.userInput, currentAnalysisResult.items);
+          return results; // Background에 결과 반환
+        } catch (error) {
+          console.error('❌ [content] AI voice command failed:', error);
+          return { error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+      } else {
+        console.log('❌ No analysis data available for AI command');
+        return { error: 'No crawling data available' };
       }
     }
   } catch (error: any) {

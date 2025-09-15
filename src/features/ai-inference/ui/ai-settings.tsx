@@ -355,6 +355,30 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // 🤖 AI 음성 명령 실제 실행 테스트 (신규)
+  const testAIVoiceCommand = async (userInput: string) => {
+    console.log('🤖 [ui] Testing AI voice command:', userInput);
+
+    try {
+      // Background에 AI 기반 음성 명령 실행 요청
+      const response = await chrome.runtime.sendMessage({
+        action: 'executeAIVoiceCommand',
+        userInput: userInput
+      });
+
+      console.log('✅ [ui] AI voice command response:', response);
+
+      if (response.success) {
+        alert(`✅ AI 음성 명령 실행 완료!\n\n명령: "${userInput}"\n실행된 단계: ${response.results.length}개`);
+      } else {
+        alert(`❌ AI 음성 명령 실행 실패!\n\n명령: "${userInput}"\n오류: ${response.error}`);
+      }
+    } catch (error: any) {
+      console.error('❌ [ui] AI voice command error:', error);
+      alert(`❌ AI 음성 명령 처리 중 오류 발생!\n\n${error.message}`);
+    }
+  };
+
   const runAutoTest = async (testSetKey: AITestSetKey) => {
     const testSet = AI_TEST_SETS[testSetKey];
     const testCases = testSet.cases;
@@ -781,6 +805,60 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 🤖 AI 음성 명령 테스트 섹션 (신규) */}
+          {aiModelStatus.state === 3 && (
+            <div className="ai-voice-command-section" style={{marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px'}}>
+              <h4>🎤 AI 음성 명령 테스트</h4>
+              <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '5px', marginBottom: '15px'}}>
+                <p style={{margin: '0 0 10px 0', fontSize: '13px', color: '#6c757d'}}>
+                  실제 음성 명령처럼 AI가 분석하여 액션 시퀀스로 변환 후 실행하는 테스트입니다.
+                </p>
+
+                <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("아이폰17 찾아줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    🔍 "아이폰17 찾아줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("로그인 버튼 클릭해줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    👆 "로그인 버튼 클릭해줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("장바구니에 담아줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    🛒 "장바구니에 담아줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("뒤로 가줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    ⬅️ "뒤로 가줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("최저가 알려줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    💰 "최저가 알려줘"
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

@@ -2,7 +2,7 @@
 
 import { BackgroundMessage, MessageHandler } from '../types/background-types';
 import { handleAIMessage, handleGetAvailableModels, handleGetAllModelsStatus, handleGetDownloadProgress, handleSwitchModel, handleMultiModelDownload, handleMultiModelDelete, handleCancelDownload } from './ai-message-handler';
-import { handleVoiceCommand } from './voice-command-handler';
+import { handleVoiceCommand, handleAIVoiceCommand } from './voice-command-handler';
 import { handleHighlightMessage } from './highlight-message-handler';
 import { handleCrawlComplete, handleAddNewItems } from './crawl-message-handler';
 import { handleMarkdownMessage } from './markdown-message-handler';
@@ -66,6 +66,15 @@ export class MessageRouter {
 
     // 음성 명령
     this.handlers.set('executeVoiceCommand', handleVoiceCommand);
+
+    // 🤖 AI 기반 음성 명령 (신규)
+    this.handlers.set('executeAIVoiceCommand', (msg, sender) => {
+      const tabId = sender.tab?.id;
+      if (!tabId) {
+        throw new Error('Tab ID not available');
+      }
+      return handleAIVoiceCommand(msg.userInput, tabId);
+    });
     
     // 하이라이트 관련
     this.handlers.set('highlightElement', handleHighlightMessage);
