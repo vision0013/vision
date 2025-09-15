@@ -6,17 +6,30 @@ import { tabStateManager } from '../controllers/managers/tab-state-manager';
  * URL 변경 처리 - 중복 감지 및 디바운싱 적용
  */
 export function handleUrlChange(tabId: number, newUrl: string): void {
-  // 1. URL 중복 체크
-  const isNewUrl = tabStateManager.updateUrl(tabId, newUrl);
-  if (!isNewUrl) {
-    console.log(`[url-handler] Duplicate URL ignored for tab ${tabId}`);
+  console.log(`🔍 [url-handler] Processing URL change for tab ${tabId}: ${newUrl}`);
+  
+  // 1. URL 유효성 사전 검사
+  if (!isValidUrl(newUrl)) {
+    console.log(`🚫 [url-handler] Invalid URL rejected for tab ${tabId}: ${newUrl}`);
     return;
   }
   
-  console.log(`🔄 [url-handler] URL changed for tab ${tabId}: ${newUrl}`);
+  // 2. URL 중복 체크
+  const previousState = tabStateManager.getTabState(tabId);
+  console.log(`📋 [url-handler] Previous URL for tab ${tabId}:`, previousState?.lastUrl);
   
-  // 2. 디바운스된 크롤러 실행
+  const isNewUrl = tabStateManager.updateUrl(tabId, newUrl);
+  if (!isNewUrl) {
+    console.log(`🔄 [url-handler] Duplicate URL ignored for tab ${tabId}: ${newUrl}`);
+    return;
+  }
+  
+  console.log(`✅ [url-handler] New URL confirmed for tab ${tabId}: ${newUrl}`);
+  
+  // 3. 디바운스된 크롤러 실행
+  console.log(`⏱️  [url-handler] Setting 300ms debounce timer for tab ${tabId}`);
   tabStateManager.setDebounce(tabId, () => {
+    console.log(`🚀 [url-handler] Debounce timer fired for tab ${tabId} - triggering crawler`);
     triggerCrawler(tabId, newUrl);
   }, 300);
 }
@@ -26,18 +39,39 @@ export function handleUrlChange(tabId: number, newUrl: string): void {
  */
 async function triggerCrawler(tabId: number, url: string): Promise<void> {
   try {
-    console.log(`🕷️ [url-handler] Triggering crawler for tab ${tabId}`);
+    console.log(`🕷️ [url-handler] Triggering crawler for tab ${tabId} at URL: ${url}`);
     
-    await chrome.tabs.sendMessage(tabId, { 
+    // 탭 상태 확인
+    const tabInfo = await getTabInfo(tabId);
+    if (!tabInfo) {
+      console.log(`❌ [url-handler] Tab ${tabId} not found, cannot trigger crawler`);
+      return;
+    }
+    
+    console.log(`📋 [url-handler] Tab ${tabId} status: ${tabInfo.status}, URL: ${tabInfo.url}`);
+    
+    const message = { 
       action: 'runCrawler',
       url 
-    });
+    };
     
-    console.log(`✅ [url-handler] Crawler triggered successfully for tab ${tabId}`);
+    console.log(`📤 [url-handler] Sending message to tab ${tabId}:`, message);
+    
+    await chrome.tabs.sendMessage(tabId, message);
+    
+    console.log(`✅ [url-handler] Crawler message sent successfully to tab ${tabId}`);
     
   } catch (error: any) {
-    // Content Script가 준비되지 않았거나 탭이 닫혔을 수 있음
-    console.log(`⚠️ [url-handler] Cannot trigger crawler for tab ${tabId}: ${error.message}`);
+    console.error(`❌ [url-handler] Failed to trigger crawler for tab ${tabId}:`, {
+      error: error.message,
+      url: url,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Content Script 로딩 상태 재확인 제안
+    if (error.message.includes('Receiving end does not exist')) {
+      console.log(`🔄 [url-handler] Content Script may not be ready for tab ${tabId}. Will retry on next URL change.`);
+    }
   }
 }
 
