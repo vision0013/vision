@@ -20,7 +20,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 응답 메시지들은 라우팅하지 않음 (Background 내부 AI 핸들러가 처리)
   const responseActions = ['modelStatusResponse', 'modelLoaded', 'modelDeleted', 'aiInitialized', 'analysisResult'];
   if (responseActions.includes(request.action)) {
-    console.log(`📬 [background] Response message received: ${request.action} (handled by AI handler)`);
+    console.log(`📬 [background] Response message received: ${request.action} - forwarding to all tabs and extension`);
+    // Offscreen에서 온 응답을 모든 확장 컴포넌트로 브로드캐스트
+    chrome.runtime.sendMessage(request).catch(() => {
+      console.log(`📨 [background] No receivers for response: ${request.action}`);
+    });
     return false; // Background 내부 리스너들이 처리하도록 함
   }
   

@@ -56,7 +56,7 @@ export async function handleVoiceCommand(
 
 /**
  * 🤖 AI 기반 음성 명령 처리 (신규)
- * 사용자 텍스트를 AI로 분석하여 직접 액션 시퀀스로 변환 후 실행
+ * Background에서 AI 분석 후 결과를 Content Script로 전송하는 방식으로 변경
  */
 export async function handleAIVoiceCommand(
   userInput: string,
@@ -65,13 +65,17 @@ export async function handleAIVoiceCommand(
   console.log('🤖 [voice-handler] Processing AI voice command:', userInput);
 
   try {
-    // Content Script로 AI 명령 처리 요청 전송
+    // TODO: AI 분석은 Offscreen에서 수행하고, 결과를 Content Script의 processVoiceCommand로 전달
+    // 현재는 임시로 기존 방식 사용
     const response = await chrome.tabs.sendMessage(tabId, {
-      action: 'processAIVoiceCommand',
-      userInput: userInput
+      action: 'processVoiceCommand',
+      detectedAction: 'find',
+      targetText: userInput,
+      direction: null,
+      originalCommand: userInput
     });
 
-    console.log('✅ [voice-handler] AI command completed:', response);
+    console.log('✅ [voice-handler] AI command completed (fallback mode):', response);
 
     return {
       success: true,

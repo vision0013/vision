@@ -1,6 +1,6 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
-import { processVoiceCommand, processAIVoiceCommand } from '../features/voice-commands';
+import { processVoiceCommand } from '../features/voice-commands';
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
 import { AnalysisResult, CrawledItem } from '@/types';
 
@@ -24,18 +24,15 @@ function executeVoiceAction(request: any, items: CrawledItem[]) {
   console.log('🎯 [content] Action result:', result);
 }
 
-// 🤖 AI 기반 음성 명령 실행 함수 (신규)
-async function executeAIVoiceAction(userInput: string, items: CrawledItem[]) {
-  console.log('🤖 [content] Executing AI voice command:', userInput);
+// 🤖 AI 기반 음성 명령은 Background에서 처리되므로 여기서는 메시지만 중계
+async function executeAIVoiceAction(userInput: string, _items: CrawledItem[]) {
+  console.log(`🤖 [content] AI voice command "${userInput}" request received, but AI processing is handled by Background`);
 
-  try {
-    const results = await processAIVoiceCommand(userInput, items);
-    console.log('✅ [content] AI command completed:', results);
-    return results;
-  } catch (error) {
-    console.error('❌ [content] AI command failed:', error);
-    throw error;
-  }
+  // AI 처리는 Background에서 수행되고, 결과만 여기서 받아서 실행
+  // Background → Offscreen → AI Analysis → Background → Content Script 순서로 처리됨
+  return {
+    error: 'AI processing should be handled by Background, not Content Script'
+  };
 }
 
 const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {

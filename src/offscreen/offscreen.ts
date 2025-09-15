@@ -1,13 +1,14 @@
 // Offscreen Document에서 AI 추론 실행
 
+import { getAIController } from '../features/ai-inference';
+
 // 요청 ID 중복 처리 방지용 세트
 const processedRequestIds = new Set<string>();
 
 // 모든 로직을 비동기 함수로 감싸서 초기화 오류를 잡습니다.
 async function initializeOffscreen() {
   try {
-    // AI 컨트롤러를 동적으로 불러와서 잠재적인 import 오류를 잡습니다.
-    const { getAIController } = await import('../features/ai-inference');
+    // AI 컨트롤러를 정적으로 불러와서 코드 스플리팅 방지
     let aiController = getAIController();
 
     // Background 스크립트로부터 메시지를 수신합니다.
