@@ -81,3 +81,26 @@ export interface AnalysisComparison {
   finalResult: any; // 최종 선택된 분석 결과
 }
 
+// 학습 스냅샷 관리
+export interface LearningSnapshot {
+  id: string;
+  name: string;
+  createdAt: Date;
+  examples: PromptExample[];
+  testResults?: {
+    accuracy: number;
+    totalTests: number;
+    correctTests: number;
+    avgConfidence: number;
+  };
+  description?: string;
+}
+
+// 프롬프트 예시 타입
+export interface PromptExample {
+  command: string;
+  action: string;
+  confidence: number;
+  reasoning: string;
+}
+
