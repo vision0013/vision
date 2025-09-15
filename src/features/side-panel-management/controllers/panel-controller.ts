@@ -132,67 +132,18 @@ export const useSidePanelController = () => {
 
   const handleVoiceCommand = useCallback(async (command: string) => {
     const currentTabId = activeTabIdRef.current;
-    const currentAnalysisResult = analysisResultRef.current;
     
-    console.log('🎤 [panel] Voice command received:', command);
+    console.log('🎤 [panel] Voice command received, sending to background:', command);
     
-    if (!currentAnalysisResult || !currentTabId) {
-      console.warn('❌ No analysis result or tab ID available for voice command');
+    if (!currentTabId) {
+      console.warn('❌ No tab ID available for voice command');
       return;
     }
     
-    // 전처리: 한글자 + 공백 + 한글자 병합
-    let preprocessed = command.toLowerCase().trim();
-    const original = preprocessed;
-    
-    // 특정 한국어 어미 패턴 병합
-    preprocessed = preprocessed
-      .replace(/써\s+줘/g, '써줘')
-      .replace(/클릭\s+해\s+줘/g, '클릭해줘')
-      .replace(/찾\s+아\s+줘/g, '찾아줘')
-      .replace(/눌\s+러\s+줘/g, '눌러줘')
-      .replace(/스크롤\s+해\s+줘/g, '스크롤해줘')
-      // 마지막 한글자를 앞 단어와 병합 (어미 처리)
-      .replace(/([가-힣]+)\s+([가-힣])$/g, '$1$2');
-    
-    if (original !== preprocessed) {
-      console.log('🔧 [panel] Preprocessed:', `"${original}" → "${preprocessed}"`);
-    }
-    
-    // 패널에서 oktjs 분석
-    let oktjsResult = null;
-    try {
-      console.log('🔄 [panel] Loading oktjs...');
-      const oktjs = await import('oktjs');
-      console.log('✅ [panel] oktjs loaded successfully');
-      
-      oktjs.init();
-      console.log('✅ [panel] oktjs initialized');
-      
-      const normalized = oktjs.normalize(preprocessed);
-      const tokens = oktjs.tokenize(normalized);
-      
-      console.log('🔍 [panel] oktjs tokens:', tokens.map(t => `${t.text}(${t.pos})`).join(' '));
-      
-      const nouns = tokens.filter(t => t.pos === 'Noun').map(t => t.text);
-      const verbs = tokens.filter(t => t.pos === 'Verb').map(t => t.text);
-      const adjectives = tokens.filter(t => t.pos === 'Adjective').map(t => t.text);
-      
-      oktjsResult = { tokens, nouns, verbs, adjectives };
-      
-      if (nouns.length > 0) console.log('📗 [panel] Nouns:', nouns);
-      if (verbs.length > 0) console.log('🎯 [panel] Verbs:', verbs);
-      if (adjectives.length > 0) console.log('🔸 [panel] Adjectives:', adjectives);
-      
-    } catch (error: any) {
-      console.log('❌ [panel] oktjs error:', error.message);
-    }
-    
+    // AI가 모든 분석을 처리하므로, 전처리나 oktjs 분석 없이 바로 백그라운드로 전송
     chrome.runtime.sendMessage({
       action: 'executeVoiceCommand',
       command: command,
-      preprocessedCommand: preprocessed, // 전처리된 명령어 추가
-      oktjsResult: oktjsResult,
       tabId: currentTabId
     });
   }, []);
