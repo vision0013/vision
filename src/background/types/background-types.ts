@@ -9,6 +9,7 @@ export interface TabState {
   debounceTimeout?: NodeJS.Timeout;
   activeElement?: ActiveElementState;
   crawledItems?: CrawledItem[]; // ✨ [신규] 크롤링된 데이터 저장
+  viewport?: { width: number; height: number }; // ✨ [신규] 뷰포트 크기 저장
 }
 
 export interface ActiveElementState {

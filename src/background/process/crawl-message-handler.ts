@@ -8,7 +8,8 @@ export async function handleCrawlComplete(
   request: any,
   sender: chrome.runtime.MessageSender
 ): Promise<boolean> {
-  const { data: analysisResult } = request;
+  // ✨ [수정] data 객체에서 analysisResult와 viewport를 구조 분해
+  const { analysisResult, viewport } = request.data;
   const tabId = sender.tab?.id;
   
   if (!tabId) {
@@ -18,13 +19,16 @@ export async function handleCrawlComplete(
   
   console.log(`📊 [crawl-handler] Crawl completed for tab ${tabId}:`, analysisResult.items?.length, 'items');
   
-  // ✨ [신규] TabStateManager에 전체 크롤링 데이터 저장
+  // ✨ [수정] TabStateManager에 크롤링 데이터와 viewport 정보 저장
   if (analysisResult.items) {
     tabStateManager.setCrawledData(tabId, analysisResult.items);
   }
+  if (viewport) {
+    tabStateManager.setViewport(tabId, viewport);
+  }
 
   try {
-    // Panel에 크롤링 결과 전달 (기존 액션명 유지)
+    // Panel에는 기존과 동일하게 analysisResult만 전달
     chrome.runtime.sendMessage({
       action: 'updatePanelData',
       tabId,

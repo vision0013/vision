@@ -9,14 +9,11 @@ import { ModelManager } from './model-manager';
 import { InferenceEngine } from './inference-engine';
 import { AI_PROMPTS } from '../config/ai-prompts';
 
-/**
- * AI 기능의 Facade 역할을 하는 메인 컨트롤러.
- * ModelManager와 InferenceEngine의 복잡한 상호작용을 조정합니다.
- */
 export class AIController {
   private modelManager: ModelManager;
   private inferenceEngine: InferenceEngine;
   private isLearning: boolean = false;
+  private isInitialized: boolean = false; // ✨ [신규] 초기화 상태 플래그
 
   constructor(config: AIModelConfig = {}, modelId?: string) {
     const targetModelId = modelId || DEFAULT_MODEL_ID;
@@ -24,28 +21,32 @@ export class AIController {
     const fullConfig = { ...modelInfo.defaultConfig, ...config };
 
     this.modelManager = new ModelManager(fullConfig, targetModelId);
-    this.inferenceEngine = new InferenceEngine(null);
+    // ✨ [수정] InferenceEngine에 컨트롤러 인스턴스 전달
+    this.inferenceEngine = new InferenceEngine(null, this);
   }
 
   async initialize(): Promise<boolean> {
+    this.isInitialized = false; // 초기화 시작 시 플래그 리셋
     const success = await this.modelManager.initialize();
     if (success) {
       this.inferenceEngine.setLlm(this.modelManager.getLlm());
+      this.isInitialized = true; // ✨ [신규] 성공 시 플래그 설정
     }
     return success;
   }
 
-  /**
-   * ✅ [BUG FIX] 이전 offscreen.ts와의 호환성을 위해 downloadAndCacheModelAsPath 메서드를 유지합니다.
-   * 이 메서드는 내부적으로 새로운 downloadAndCacheModel을 호출합니다.
-   */
-  async downloadAndCacheModelAsPath(token: string, modelId?: string): Promise<boolean> {
-    console.log('💾 [ai-controller] Maintaining compatibility for downloadAndCacheModelAsPath call...');
-    return this.downloadAndCacheModel(token, modelId);
+  // ✨ [신규] 추론 가능 상태 확인 메소드
+  public isReadyForInference(): boolean {
+    return this.isInitialized && !this.isLearning;
   }
 
   async downloadAndCacheModel(token: string, modelId?: string): Promise<boolean> {
+    this.isInitialized = false; // 다운로드 시작 시 초기화 상태 해제
     return this.modelManager.downloadAndCacheModel(token, modelId);
+  }
+
+  async downloadAndCacheModelAsPath(token: string, modelId?: string): Promise<boolean> {
+    return this.downloadAndCacheModel(token, modelId);
   }
 
   cancelDownload(): void {
@@ -130,6 +131,7 @@ export class AIController {
   }
 
   async switchModel(modelId: string, token?: string, autoLoad: boolean = false): Promise<boolean> {
+    this.isInitialized = false; // 모델 전환 시 초기화 상태 해제
     const modelInfo = AVAILABLE_MODELS[modelId];
     if (!modelInfo) return false;
 

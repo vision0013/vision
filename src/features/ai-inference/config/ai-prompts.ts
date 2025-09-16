@@ -10,32 +10,50 @@ export interface PromptExample {
   reasoning: string;
 }
 
-// ✨ [수정] template 시그니처에 crawledItems 추가
 export interface PromptTemplate {
   name: string;
   description: string;
   template: (voiceInput: string, examples: PromptExample[], crawledItems: CrawledItem[]) => string;
 }
 
-// ✨ [신규] 크롤링된 데이터를 AI 프롬프트에 맞게 변환하는 헬퍼
+/**
+ * ✨ [개선] 크롤링된 데이터를 AI 프롬프트에 맞게 요약하고 축소하는 헬퍼
+ */
 function formatCrawledItemsForPrompt(items: CrawledItem[]): string {
-  return items
-    .filter(item => !item.hidden && (item.isClickable || item.isInputtable || (item.text && item.text.length > 0)))
+  const MAX_ITEMS_TO_SEND = 40;    // 전송 개수 대폭 감소
+  const MAX_TEXT_LENGTH = 50;      // 텍스트 길이 추가 제한
+
+  // 1. 상호작용 가능한 중요 요소 (input, button 등)를 우선적으로 필터링
+  const priorityItems = items.filter(item => 
+    !item.hidden && (item.type === 'button' || item.type === 'input' || item.type === 'textarea')
+  );
+
+  // 2. 그 외 클릭 가능한 링크나 텍스트 요소 필터링
+  const otherItems = items.filter(item => 
+    !item.hidden && 
+    !(item.type === 'button' || item.type === 'input' || item.type === 'textarea') && 
+    (item.isClickable || (item.text && item.text.length > 0))
+  );
+
+  // 3. 중요 요소 먼저, 그 다음 다른 요소 순으로 합치고 최대 개수 제한
+  const combinedItems = [...priorityItems, ...otherItems].slice(0, MAX_ITEMS_TO_SEND);
+
+  return combinedItems
     .map(item => {
+      // ✨ [개선] 데이터 형식을 압축하여 토큰 사용량 최소화
       const parts: string[] = [];
-      parts.push(`id: ${item.id}`);
-      parts.push(`type: ${item.type}`);
-      if (item.text) parts.push(`text: "${item.text}"`);
-      if (item.label) parts.push(`label: "${item.label}"`);
-      if (item.isClickable) parts.push(`clickable`);
-      if (item.isInputtable) parts.push(`inputtable`);
-      return `{ ${parts.join(', ')} }`;
+      parts.push(`id:${item.id}`);
+      parts.push(`t:${item.type}`);
+      if (item.text) parts.push(`txt:"${item.text.substring(0, MAX_TEXT_LENGTH)}"`);
+      if (item.label) parts.push(`l:"${item.label.substring(0, MAX_TEXT_LENGTH)}"`);
+      if (item.isClickable) parts.push(`clk:t`);
+      if (item.isInputtable) parts.push(`inpt:t`);
+      return `{${parts.join(',')}}`;
     })
-    .join('\n');
+    .join(' '); // 줄바꿈 대신 공백으로 구분하여 토큰 추가 절약
 }
 
 export const AI_PROMPTS = {
-  // ✨ [신규] AI 에이전트 계획 프롬프트
   AGENT_PLANNER: {
     name: "Agent Planner",
     description: "사용자 명령과 현재 페이지의 DOM 요소를 바탕으로 행동 계획을 JSON 시퀀스로 생성합니다.",
@@ -47,7 +65,6 @@ You are a helpful AI agent controlling a web browser. Your goal is to create a p
 
 **CONTEXT: INTERACTABLE PAGE ELEMENTS**
 Here are the interactable elements currently on the page. Each element has an 'id' you MUST use to target it.
-
 
 ${pageElements}
 
@@ -72,15 +89,12 @@ Your Plan:
   },
 } as const;
 
-// 현재 사용할 프롬프트 설정
 export const CURRENT_PROMPT = AI_PROMPTS.AGENT_PLANNER;
 
-// 프롬프트 전환 유틸리티
 export function getPromptTemplate(promptName: keyof typeof AI_PROMPTS) {
   return AI_PROMPTS[promptName];
 }
 
-// JSON 파일에서 기본 예시 로드
 export function getBaseExamples(): PromptExample[] {
   return promptExamples.baseExamples;
 }

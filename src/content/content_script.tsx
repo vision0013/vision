@@ -34,7 +34,13 @@ if (window.self !== window.top) {
       dynamicObserverActive = false;
     }
     const analysisResult = await pageCrawler.analyze();
-    const success = await safeRuntimeMessage({ action: 'crawlComplete', data: analysisResult });
+    const success = await safeRuntimeMessage({ 
+      action: 'crawlComplete', 
+      data: {
+        analysisResult,
+        viewport: { width: window.innerWidth, height: window.innerHeight }
+      } 
+    });
     if (success) {
       startDynamicObserver(pageCrawler, async (newItems) => {
         await safeRuntimeMessage({ action: 'addNewItems', data: newItems });

@@ -1,5 +1,24 @@
 import { handleAIMessage } from './ai-message-handler';
 import { tabStateManager } from '../controllers/managers/tab-state-manager';
+import { BoundingBox } from '../../types';
+
+/**
+ * ✨ [수정] 요소의 좌표가 화면(viewport) 내에 있는지 확인하는 헬퍼 함수
+ */
+function isRectInViewport(rect: BoundingBox, viewport: { width: number; height: number }): boolean {
+  // bottom과 right를 직접 계산
+  const bottom = rect.top + rect.height;
+  const right = rect.left + rect.width;
+
+  return (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    bottom <= viewport.height &&
+    right <= viewport.width &&
+    rect.width > 0 &&
+    rect.height > 0
+  );
+}
 
 /**
  * UI (패널)로부터 받은 음성 명령을 받아 전체 AI 처리 흐름을 지휘합니다.
@@ -17,15 +36,20 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
 
   try {
     const crawledData = tabStateManager.getCrawledData(tabId);
-    if (!crawledData || crawledData.length === 0) {
-      console.warn(`⚠️ [Orchestrator] No crawled data found for tab ${tabId}.`);
-      return { success: false, error: 'No crawled data for this tab.' };
+    const viewport = tabStateManager.getViewport(tabId);
+
+    if (!crawledData || crawledData.length === 0 || !viewport) {
+      console.warn(`⚠️ [Orchestrator] No crawled data or viewport info for tab ${tabId}.`);
+      return { success: false, error: 'No crawled data or viewport info for this tab.' };
     }
+
+    const visibleItems = crawledData.filter(item => isRectInViewport(item.rect, viewport));
+    console.log(`[Orchestrator] Filtered to ${visibleItems.length} visible items (out of ${crawledData.length})`);
 
     const response = await handleAIMessage({
       action: 'getAIPlan',
       command: command,
-      crawledItems: crawledData
+      crawledItems: visibleItems
     });
 
     if (response.error) {
@@ -37,40 +61,25 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
 
     if (!aiResult.plan || aiResult.plan.length === 0) {
       console.log('🤔 [Orchestrator] AI returned an empty plan.');
-      // TODO: 사용자에게 AI가 행동을 결정하지 못했음을 알림
       return { success: true, steps: 0, message: 'AI could not determine an action.' };
     }
 
-    // ✨ [수정] AI가 생성한 plan을 직접 순회하며 정밀 실행 명령 전송
     for (const [index, step] of aiResult.plan.entries()) {
       console.log(`🔄 [Orchestrator] Executing step ${index + 1}/${aiResult.plan.length} on tab ${tabId}:`, step);
       
-      // 각 스텝에 맞는 정밀 액션 메시지 전송
       switch (step.action) {
         case 'CLICK':
-          await sendActionToContentScript(tabId, { 
-            action: 'execute_click', 
-            crawlerId: step.id 
-          });
+          await sendActionToContentScript(tabId, { action: 'execute_click', crawlerId: step.id });
           break;
         case 'INPUT':
-          await sendActionToContentScript(tabId, { 
-            action: 'execute_input', 
-            crawlerId: step.id, 
-            value: step.value 
-          });
+          await sendActionToContentScript(tabId, { action: 'execute_input', crawlerId: step.id, value: step.value });
           break;
         case 'NAVIGATE':
-          await sendActionToContentScript(tabId, { 
-            action: 'execute_navigate', 
-            url: step.url 
-          });
+          await sendActionToContentScript(tabId, { action: 'execute_navigate', url: step.url });
           break;
         default:
           console.warn(`⚠️ [Orchestrator] Unknown action in AI plan:`, step);
       }
-
-      // TODO: 각 스텝 실행 후 대기 시간 및 성공 여부 확인 로직 추가
     }
 
     console.log(`✅ [Orchestrator] Command sequence completed for "${command}"`);
@@ -82,12 +91,8 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
   }
 }
 
-/**
- * content_script로 실행 액션을 보내는 헬퍼 함수
- */
 async function sendActionToContentScript(tabId: number, payload: any) {
   try {
-    // 응답을 기다릴 수 있도록 수정 (향후 확장용)
     const response = await chrome.tabs.sendMessage(tabId, payload);
     if (response?.success === false) {
       console.error(`[Orchestrator] Step failed in content script:`, response.error);
