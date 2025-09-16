@@ -18,6 +18,7 @@ export const useSidePanelController = () => {
     isLoading,
     setIsLoading,
     setMode,
+    aiModelStatus,
   } = useSidePanelStore();
 
   const [activeElementId, setActiveElementId] = useState<number | null>(null);
@@ -111,6 +112,40 @@ export const useSidePanelController = () => {
 
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 
+  // ✨ [신규] AI 상태 체크를 포함한 음성인식 토글 함수 (로컬 상태 사용)
+  const handleToggleListening = useCallback(() => {
+    console.log('🎤 [handleToggleListening] Current isListening:', isListening);
+    console.log('🎤 [handleToggleListening] Current aiModelStatus:', aiModelStatus);
+
+    // 음성인식을 시작하려고 할 때만 AI 상태 체크
+    if (!isListening) {
+      const aiState = aiModelStatus.state;
+
+      if (aiState !== 3) {
+        let alertMessage = 'AI 모델을 먼저 로드해주세요.';
+
+        if (aiState === 1) {
+          alertMessage += '\nAI 설정 탭에서 Hugging Face 토큰을 입력하고 모델을 다운로드하세요.';
+        } else if (aiState === 4) {
+          alertMessage += '\n모델이 캐시에 있지만 로드되지 않았습니다. "로드" 버튼을 누르세요.';
+        } else if (aiState === 2) {
+          alertMessage += '\n모델 로딩 중입니다. 잠시 후 다시 시도해주세요.';
+        }
+
+        console.log('❌ [handleToggleListening] AI not ready, showing alert:', alertMessage);
+        alert(alertMessage);
+        return; // 음성인식 시작하지 않음
+      }
+
+      console.log('✅ [handleToggleListening] AI ready, proceeding with voice recognition');
+    } else {
+      console.log('🛑 [handleToggleListening] Stopping voice recognition');
+    }
+
+    // AI 상태가 정상이거나 중지하려는 경우에만 실행
+    toggleListening();
+  }, [isListening, toggleListening, aiModelStatus]);
+
   const exportData = () => {
     if (!analysisResult) return;
     const dataStr = JSON.stringify(analysisResult, null, 2);
@@ -132,7 +167,7 @@ export const useSidePanelController = () => {
     onItemClick: handleItemClick,
     isListening,
     transcribedText,
-    onToggleListening: toggleListening,
+    onToggleListening: handleToggleListening,
     onExportData: exportData,
     recognitionError: error,
     activeElementId,
