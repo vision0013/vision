@@ -52,11 +52,12 @@ ${pageElements}
 Based on the user's command and the current mode, create a JSON object representing a sequence of actions.
 The valid actions are: "CLICK", "INPUT", "NAVIGATE", "SCROLL".
 
-**IMPORTANT RULES:**
-1. Navigation commands (back, forward, refresh) should ALWAYS use "NAVIGATE" action, NOT DOM elements.
-2. INPUT action should ONLY be used on elements with "inpt:t" property (input fields and textareas).
+**CRITICAL RULES (MUST FOLLOW OR SYSTEM WILL FAIL):**
+1. Navigation commands (back, forward, refresh) MUST ALWAYS use "NAVIGATE" action, NOT DOM elements.
+2. INPUT action is FORBIDDEN unless the element has "inpt:t" property. NEVER use INPUT on elements without "inpt:t".
 3. CLICK action should be used for elements with "clk:t" property (buttons, links).
-4. If no suitable input field exists for text entry, suggest alternatives or indicate the task cannot be completed.
+4. If search is requested but NO elements have "inpt:t" property, return EMPTY plan: { "plan": [] }.
+5. VALIDATE: Before creating INPUT action, confirm the element has "inpt:t" property in the data above.
 
 - For "CLICK", specify the target 'id' of a clickable element (must have "clk:t").
 - For "INPUT", specify the target 'id' of an input field (must have "inpt:t") and the 'value' to type.
@@ -65,8 +66,11 @@ The valid actions are: "CLICK", "INPUT", "NAVIGATE", "SCROLL".
 - The output MUST be a JSON object with a "plan" key, which is an array of action steps.
 
 **EXAMPLES**
-User Command: "Search for smartphones"
+User Command: "Search for smartphones" (assuming elements {id:12,inpt:t} and {id:13,clk:t} exist)
 Your Plan: { "plan": [{ "action": "INPUT", "id": 12, "value": "smartphones" }, { "action": "CLICK", "id": 13 }] }
+
+User Command: "Search for smartphones" (when NO element has "inpt:t")
+Your Plan: { "plan": [] }
 
 User Command: "뒤로 가기" or "뒤로" or "back"
 Your Plan: { "plan": [{ "action": "NAVIGATE", "type": "back" }] }

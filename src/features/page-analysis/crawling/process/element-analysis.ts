@@ -51,7 +51,22 @@ export function getElementStateAndActionability(el: HTMLElement) {
   };
 
   const isClickable = !isDisabled && (isButton || isLink);
-  const isInputtable = !isDisabled && (tag === 'input' || tag === 'textarea');
+
+  // ✨ [개선] 더 포괄적인 입력 가능 요소 감지
+  const isInputtable = !isDisabled && (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    el.contentEditable === 'true' ||
+    role === 'textbox' ||
+    role === 'searchbox' ||
+    el.hasAttribute('contenteditable') ||
+    // 검색창 컨테이너도 입력 가능으로 인식 (내부에 input이 있는 경우)
+    (el.classList.contains('search_input_box') ||
+     el.classList.contains('search-box') ||
+     el.classList.contains('search_input') ||
+     !!el.querySelector('input[type="search"], input[type="text"], input:not([type])')
+    )
+  );
 
   return { state, isClickable, isInputtable };
 }
