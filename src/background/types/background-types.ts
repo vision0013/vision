@@ -1,15 +1,16 @@
-// Background 전용 타입 정의 (기존 타입 최대한 재사용)
+// Background 전용 타입 정의
 
 import { AIAnalysisResult } from '../../features/ai-inference/types/ai-types';
-import { CrawledItem } from '../../types';
+import { CrawledItem, Mode } from '../../types';
 
 // Background 고유 상태 관리 타입들
 export interface TabState {
   lastUrl?: string;
   debounceTimeout?: NodeJS.Timeout;
   activeElement?: ActiveElementState;
-  crawledItems?: CrawledItem[]; // ✨ [신규] 크롤링된 데이터 저장
-  viewport?: { width: number; height: number }; // ✨ [신규] 뷰포트 크기 저장
+  crawledItems?: CrawledItem[];
+  viewport?: { width: number; height: number };
+  mode?: Mode;
 }
 
 export interface ActiveElementState {
@@ -34,10 +35,11 @@ export interface VoiceCommandRequest extends BackgroundMessage {
 }
 
 export interface AIMessageRequest extends BackgroundMessage {
-  action: string; // 더 이상 특정 문자열 리터럴에 얽매이지 않도록 일반화
+  action: string;
   token?: string;
   command?: string;
-  crawledItems?: CrawledItem[]; // ✨ [신규] 크롤링 데이터 추가
+  crawledItems?: CrawledItem[];
+  mode?: Mode;
 }
 
 export interface HighlightRequest extends BackgroundMessage {
@@ -46,7 +48,7 @@ export interface HighlightRequest extends BackgroundMessage {
   tabId?: number;
 }
 
-// AI 의도 → Content Script 액션 매핑 타입
+// AI 의도 → Content Script 액션 매핑 타입 (구형, 점진적 제거 대상)
 export interface ActionPayload {
   detectedAction: 'click' | 'find' | 'scroll' | 'input' | 'navigation';
   targetText: string;
@@ -55,7 +57,7 @@ export interface ActionPayload {
   confidence?: number;
 }
 
-// 함수 시그니처들 (실용적 타이핑)
+// 함수 시그니처들
 export type ActionMapper = (
   aiResult?: AIAnalysisResult,
   oktjsResult?: any,
@@ -63,6 +65,6 @@ export type ActionMapper = (
 ) => ActionPayload;
 
 export type MessageHandler = (
-  request: any, // 각 핸들러가 자신의 타입으로 캐스팅
+  request: any,
   sender: chrome.runtime.MessageSender
 ) => Promise<any>;

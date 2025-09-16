@@ -1,7 +1,7 @@
 // 탭 상태 관리자 - Map 기반 고성능 상태 관리
 
 import { TabState, ActiveElementState } from '../../types/background-types';
-import { CrawledItem } from '../../../types';
+import { CrawledItem, Mode } from '../../../types'; // ✨ [수정] Mode 임포트 경로 변경
 
 export class TabStateManager {
   private states = new Map<number, TabState>();
@@ -31,29 +31,35 @@ export class TabStateManager {
   setCrawledData(tabId: number, items: CrawledItem[]): void {
     const state = this.getOrCreate(tabId);
     state.crawledItems = items;
-    console.log(`[TabStateManager] Set ${items.length} crawled items for tab ${tabId}`);
   }
 
   appendCrawledData(tabId: number, newItems: CrawledItem[]): void {
     const state = this.getOrCreate(tabId);
     if (!state.crawledItems) state.crawledItems = [];
     state.crawledItems.push(...newItems);
-    console.log(`[TabStateManager] Appended ${newItems.length} new items for tab ${tabId}. Total: ${state.crawledItems.length}`);
   }
 
   getCrawledData(tabId: number): CrawledItem[] | undefined {
     return this.states.get(tabId)?.crawledItems;
   }
 
-  // ✨ [신규] Viewport 설정 메소드
   setViewport(tabId: number, viewport: { width: number; height: number }): void {
     const state = this.getOrCreate(tabId);
     state.viewport = viewport;
   }
 
-  // ✨ [신규] Viewport 조회 메소드
   getViewport(tabId: number): { width: number; height: number } | undefined {
     return this.states.get(tabId)?.viewport;
+  }
+
+  setMode(tabId: number, mode: Mode): void {
+    const state = this.getOrCreate(tabId);
+    state.mode = mode;
+    console.log(`[TabStateManager] Mode for tab ${tabId} set to: ${mode}`);
+  }
+
+  getMode(tabId: number): Mode | undefined {
+    return this.states.get(tabId)?.mode;
   }
 
   getTabState(tabId: number): TabState | undefined {
@@ -65,7 +71,8 @@ export class TabStateManager {
     if (state) {
       if (state.debounceTimeout) clearTimeout(state.debounceTimeout);
       state.crawledItems = undefined;
-      state.viewport = undefined; // ✨ [수정] viewport 정보도 정리
+      state.viewport = undefined;
+      state.mode = undefined;
     }
     this.states.delete(tabId);
     console.log(`[TabStateManager] Cleaned up state for tab ${tabId}`);
@@ -77,7 +84,11 @@ export class TabStateManager {
 
   private getOrCreate(tabId: number): TabState {
     if (!this.states.has(tabId)) {
-      this.states.set(tabId, { crawledItems: [], viewport: { width: 0, height: 0 } }); // ✨ [수정] 초기 상태 추가
+      this.states.set(tabId, { 
+        crawledItems: [], 
+        viewport: { width: 0, height: 0 },
+        mode: 'navigate' 
+      });
     }
     return this.states.get(tabId)!;
   }

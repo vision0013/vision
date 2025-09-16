@@ -1,12 +1,12 @@
 // src/features/ai-inference/controllers/inference-engine.ts
 
 import { LlmInference } from '@mediapipe/tasks-genai';
-import { CrawledItem } from '../../../types';
+import { CrawledItem, Mode } from '../../../types';
 import { AIAnalysisResult } from '../types/ai-types';
 import { getPromptTemplate, AI_PROMPTS, getBaseExamples } from '../config/ai-prompts';
 import { AIResponseParser } from '../process/ai-response-parser';
 import { LearningDataManager } from '../process/learning-data-manager';
-import type { AIController } from './ai-controller'; // ✨ [신규] 타입 임포트
+import type { AIController } from './ai-controller';
 
 /**
  * AI 추론 실행 및 프롬프트 구성을 담당하는 클래스
@@ -16,13 +16,13 @@ export class InferenceEngine {
   private analysisQueue: Array<{ 
     voiceInput: string;
     crawledItems: CrawledItem[];
+    mode: Mode; // ✨ [신규] 큐에 mode 추가
     resolve: (result: AIAnalysisResult) => void;
     reject: (error: Error) => void;
   }> = [];
 
   private currentPromptName: keyof typeof AI_PROMPTS = 'AGENT_PLANNER';
 
-  // ✨ [수정] 생성자에서 AIController 인스턴스를 받음
   constructor(
     private llm: LlmInference | null,
     private aiController: AIController
@@ -32,25 +32,27 @@ export class InferenceEngine {
     this.llm = llm;
   }
 
-  async analyzeIntent(voiceInput: string, crawledItems: CrawledItem[]): Promise<AIAnalysisResult> {
+  // ✨ [수정] mode를 인자로 받도록 변경
+  async analyzeIntent(voiceInput: string, crawledItems: CrawledItem[], mode: Mode): Promise<AIAnalysisResult> {
     return new Promise((resolve, reject) => {
-      this.analysisQueue.push({ voiceInput, crawledItems, resolve, reject });
+      this.analysisQueue.push({ voiceInput, crawledItems, mode, resolve, reject });
       this.processAnalysisQueue();
     });
   }
 
   private async processAnalysisQueue(): Promise<void> {
-    // ✨ [수정] AI 컨트롤러가 준비되었는지, 그리고 이미 분석 중인지 확인
     if (!this.aiController.isReadyForInference() || this.isAnalyzing || this.analysisQueue.length === 0) {
       return;
     }
 
     this.isAnalyzing = true;
-    const { voiceInput, crawledItems, resolve, reject } = this.analysisQueue.shift()!;
+    // ✨ [수정] 큐에서 mode 꺼내기
+    const { voiceInput, crawledItems, mode, resolve, reject } = this.analysisQueue.shift()!;
 
     try {
-      const prompt = await this.buildAnalysisPrompt(voiceInput, crawledItems);
-      const response = await this.llm!.generateResponse(prompt); // llm이 null이 아님을 보장 (isReadyForInference 통과)
+      // ✨ [수정] buildAnalysisPrompt에 mode 전달
+      const prompt = await this.buildAnalysisPrompt(voiceInput, crawledItems, mode);
+      const response = await this.llm!.generateResponse(prompt);
       const result = AIResponseParser.parseAIResponse(response, voiceInput);
       resolve(result);
     } catch (error: any) {
@@ -58,17 +60,18 @@ export class InferenceEngine {
       reject(error);
     } finally {
       this.isAnalyzing = false;
-      // 다음 아이템 처리를 위해 재귀 호출
       this.processAnalysisQueue();
     }
   }
 
-  private async buildAnalysisPrompt(voiceInput: string, crawledItems: CrawledItem[]): Promise<string> {
+  // ✨ [수정] buildAnalysisPrompt 시그니처 변경
+  private async buildAnalysisPrompt(voiceInput: string, crawledItems: CrawledItem[], mode: Mode): Promise<string> {
     const promptTemplate = getPromptTemplate(this.currentPromptName);
     const baseExamples = getBaseExamples();
     const learnedExamples = await LearningDataManager.getLearnedExamples();
     const allExamples = [...learnedExamples, ...baseExamples];
-    return promptTemplate.template(voiceInput, allExamples, crawledItems);
+    // ✨ [수정] template 함수에 mode 전달
+    return promptTemplate.template(voiceInput, allExamples, crawledItems, mode);
   }
 
   public setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {

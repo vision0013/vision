@@ -34,11 +34,23 @@ function getSmartRankedItems(items: CrawledItem[], command: string): CrawledItem
 export async function handleCommandFromUI(request: any, sender: chrome.runtime.MessageSender) {
   const { command } = request;
   const tabId = sender.tab?.id || request.tabId;
-  const MAX_ITEMS_TO_SEND = 40; // AI에게 보낼 최대 아이템 개수
+  const MAX_ITEMS_TO_SEND = 40;
 
   if (!tabId) {
     console.error('❌ [Orchestrator] No tab ID found for the command.');
     return { success: false, error: 'No tab ID' };
+  }
+
+  // ✨ [신규] 메타 명령어 처리 (모드 전환)
+  const lowerCommand = command.toLowerCase();
+  if (lowerCommand.includes('탐색 모드')) {
+    tabStateManager.setMode(tabId, 'navigate');
+    // TODO: UI에 모드 변경 알림
+    return { success: true, message: "Mode changed to navigate." };
+  } else if (lowerCommand.includes('검색 모드')) {
+    tabStateManager.setMode(tabId, 'search');
+    // TODO: UI에 모드 변경 알림
+    return { success: true, message: "Mode changed to search." };
   }
 
   console.log(`🤖 [Orchestrator] Processing command for tab ${tabId}: "${command}"`);
@@ -46,6 +58,7 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
   try {
     const crawledData = tabStateManager.getCrawledData(tabId);
     const viewport = tabStateManager.getViewport(tabId);
+    const mode = tabStateManager.getMode(tabId) || 'navigate'; // 기본값은 탐색 모드
 
     if (!crawledData || crawledData.length === 0 || !viewport) {
       console.warn(`⚠️ [Orchestrator] No crawled data or viewport info for tab ${tabId}.`);
@@ -54,16 +67,16 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
 
     const visibleItems = crawledData.filter(item => isRectInViewport(item.rect, viewport));
     const rankedItems = getSmartRankedItems(visibleItems, command);
-    
-    // ✨ [수정] 관련도 순 + 전체 순, 중복 제거 후 최종 개수 제한
     const finalItemsForAI = [...new Set([...rankedItems, ...visibleItems])].slice(0, MAX_ITEMS_TO_SEND);
 
-    console.log(`[Orchestrator] Filtered to ${finalItemsForAI.length} items for AI (out of ${crawledData.length} total)`);
+    console.log(`[Orchestrator] Filtered to ${finalItemsForAI.length} items for AI in ${mode} mode.`);
 
+    // ✨ [수정] AI에게 현재 모드 정보 전달
     const response = await handleAIMessage({
       action: 'getAIPlan',
       command: command,
-      crawledItems: finalItemsForAI
+      crawledItems: finalItemsForAI,
+      mode: mode
     });
 
     if (response.error) throw new Error(response.error);

@@ -1,3 +1,5 @@
+export type Mode = 'navigate' | 'search';
+
 export interface BoundingBox {
   top: number;
   left: number;
@@ -23,18 +25,13 @@ export interface CrawledItem {
   href?: string;
   label?: string;
   hidden?: boolean;
-  // 입력 요소 관련 필드
   inputType?: string;
   placeholder?: string;
-
-  // ✨ [신규] 요소의 현재 상태
   state: {
     isDisabled: boolean;
     isChecked?: boolean;
     isFocused: boolean;
   };
-
-  // ✨ [신규] AI의 판단을 돕는 행동 가능성
   isClickable: boolean;
   isInputtable: boolean;
 }
@@ -57,7 +54,6 @@ export interface MessagePayload {
   payload?: AnalysisResult;
 }
 
-// ✨ 크롤러 인터페이스 정의 (네이버 iframe 지원)
 export interface ICrawler {
   analyze(): Promise<AnalysisResult>;
   analyzeElements(elements: HTMLElement[]): CrawledItem[];

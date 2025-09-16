@@ -1,6 +1,6 @@
 // src/ai-core/config/ai-prompts.ts
 
-import { CrawledItem } from '../../../types';
+import { CrawledItem, Mode } from '../../../types';
 import promptExamples from './prompt-examples.json';
 
 export interface PromptExample {
@@ -10,17 +10,15 @@ export interface PromptExample {
   reasoning: string;
 }
 
+// ✨ [수정] template 시그니처에 mode 추가
 export interface PromptTemplate {
   name: string;
   description: string;
-  template: (voiceInput: string, examples: PromptExample[], crawledItems: CrawledItem[]) => string;
+  template: (voiceInput: string, examples: PromptExample[], crawledItems: CrawledItem[], mode: Mode) => string;
 }
 
-/**
- * ✨ [리팩터링] 전달받은 아이템 목록을 AI 프롬프트 형식으로 변환만 수행
- */
 function formatCrawledItemsForPrompt(items: CrawledItem[]): string {
-  const MAX_TEXT_LENGTH = 50; // 텍스트 길이는 계속 제한
+  const MAX_TEXT_LENGTH = 50;
 
   return items
     .map(item => {
@@ -40,11 +38,17 @@ export const AI_PROMPTS = {
   AGENT_PLANNER: {
     name: "Agent Planner",
     description: "사용자 명령과 현재 페이지의 DOM 요소를 바탕으로 행동 계획을 JSON 시퀀스로 생성합니다.",
-    template: (voiceInput: string, _examples: PromptExample[], crawledItems: CrawledItem[]) => {
+    // ✨ [수정] template 함수가 mode를 받도록 변경
+    template: (voiceInput: string, _examples: PromptExample[], crawledItems: CrawledItem[], mode: Mode) => {
       const pageElements = formatCrawledItemsForPrompt(crawledItems);
 
+      // ✨ [수정] 프롬프트에 현재 모드 정보를 포함시켜 AI의 행동을 유도
       return `<start_of_turn>user
 You are a helpful AI agent controlling a web browser. Your goal is to create a plan to fulfill the user's command based on the current state of the web page.
+
+**CURRENT MODE: ${mode.toUpperCase()}**
+- In 'navigate' mode, your primary goal is to find and click elements to navigate the page.
+- In 'search' mode, your primary goal is to input text into search bars and submit.
 
 **CONTEXT: INTERACTABLE PAGE ELEMENTS**
 Here are the interactable elements currently on the page. Each element has an 'id' you MUST use to target it.
@@ -52,7 +56,7 @@ Here are the interactable elements currently on the page. Each element has an 'i
 ${pageElements}
 
 **TASK**
-Based on the user's command, create a JSON object representing a sequence of actions.
+Based on the user's command and the current mode, create a JSON object representing a sequence of actions.
 The valid actions are: "CLICK", "INPUT", "NAVIGATE".
 
 - For "CLICK", specify the target 'id' of the element to click.

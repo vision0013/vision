@@ -55,7 +55,8 @@ export async function handleAIMessage(
       failedTests: request.failedTests,
       snapshotId: request.snapshotId,
       description: request.description,
-      crawledItems: request.crawledItems // ✨ [신규] 크롤링 데이터 추가
+      crawledItems: request.crawledItems, // ✨ [신규] 크롤링 데이터 추가
+      mode: request.mode // ✨ [신규] 모드 정보 추가
     };
     // 중복 디버깅: 전송 메시지 로그
     console.log(`📤 [ai-handler] Sending to Offscreen:`, messageToSend);
