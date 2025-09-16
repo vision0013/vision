@@ -115,6 +115,12 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
         default:
           console.warn(`⚠️ [Orchestrator] Unknown action in AI plan:`, step);
       }
+
+      // ✨ FIX: Add delay after INPUT if next action is CLICK to handle UI changes like autocomplete.
+      if (step.action === 'INPUT' && aiResult.plan[index + 1]?.action === 'CLICK') {
+        console.log('[Orchestrator] INPUT followed by CLICK, adding 300ms delay.');
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
     }
 
     console.log(`✅ [Orchestrator] Command sequence completed for "${command}"`);

@@ -3,8 +3,6 @@
 // Page Analysis
 export * from './page-analysis/crawling';
 
-// Voice Commands
-export * from './voice-commands';
 
 // Voice Recognition  
 export * from './voice-recognition';
