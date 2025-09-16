@@ -33,6 +33,32 @@ export class ModelManager {
     return this.status.state === 3 && this.llm !== null;
   }
 
+  private async checkWebGPUSupport(): Promise<void> {
+    try {
+      if (!('gpu' in navigator)) {
+        console.warn('⚠️ [model-manager] WebGPU not supported in this browser');
+        return;
+      }
+
+      const adapter = await (navigator as any).gpu.requestAdapter();
+      if (!adapter) {
+        console.warn('⚠️ [model-manager] No WebGPU adapter found');
+        return;
+      }
+
+      const device = await adapter.requestDevice();
+      console.log('🚀 [model-manager] WebGPU is supported and available');
+      console.log('🔧 [model-manager] GPU Adapter:', adapter);
+      console.log('🔧 [model-manager] GPU Device:', device);
+
+      // MediaPipe는 자동으로 WebGPU를 사용하므로 여기서는 확인만 함
+      console.log('✅ [model-manager] MediaPipe will use GPU acceleration if model supports it');
+
+    } catch (error) {
+      console.warn('⚠️ [model-manager] WebGPU initialization failed:', error);
+    }
+  }
+
   async initialize(): Promise<boolean> {
     if (this.status.state === 3) return true;
     if (this.status.state === 2) return false;
@@ -40,6 +66,9 @@ export class ModelManager {
     try {
       this.status = { ...this.status, state: 2 };
       const startTime = Date.now();
+
+      // WebGPU 지원 확인
+      await this.checkWebGPUSupport();
 
       const modelExists = await OPFSFileManager.checkModelExists(this.currentModelId);
       if (!modelExists) {
@@ -61,7 +90,18 @@ export class ModelManager {
 
       const loadTime = Date.now() - startTime;
       this.status = { state: 3, loadTime, currentModelId: this.currentModelId };
+
+      // 현재 모델 정보 출력
+      const modelInfo = AVAILABLE_MODELS[this.currentModelId];
       console.log(`✅ [model-manager] Model loaded in ${loadTime}ms`);
+      console.log(`🤖 [model-manager] Active Model: ${modelInfo?.name || this.currentModelId}`);
+      console.log(`📋 [model-manager] Model ID: ${this.currentModelId}`);
+      console.log(`📊 [model-manager] Model Size: ${modelInfo?.size || 'Unknown'}`);
+      console.log(`🔧 [model-manager] Model Config:`, {
+        maxTokens: this.config.maxTokens,
+        temperature: this.config.temperature,
+        topK: this.config.topK
+      });
       return true;
 
     } catch (error: any) {

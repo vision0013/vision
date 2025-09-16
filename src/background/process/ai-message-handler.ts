@@ -250,6 +250,14 @@ export async function handleSwitchModel(modelId: string, token?: string): Promis
         }).catch(() => {
           // 메시지 전송 실패는 조용히 무시
         });
+
+        // 🔧 [신규] Offscreen에도 모델 전환 알림
+        chrome.runtime.sendMessage({
+          action: 'modelSwitched',
+          modelId: modelId
+        }).catch(() => {
+          // 메시지 전송 실패는 조용히 무시
+        });
       } catch (error) {
         console.warn('⚠️ [ai-handler] Failed to notify model switch:', error);
       }

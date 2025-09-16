@@ -77,7 +77,17 @@ export class InferenceEngine {
     try {
       // ✨ [수정] buildAnalysisPrompt에 mode 전달
       const prompt = await this.buildAnalysisPrompt(voiceInput, crawledItems, mode);
+
+      // 성능 측정 시작
+      const inferenceStartTime = performance.now();
       const response = await this.llm!.generateResponse(prompt);
+      const inferenceEndTime = performance.now();
+      const inferenceTime = inferenceEndTime - inferenceStartTime;
+
+      console.log(`🚀 [inference-engine] AI inference took ${inferenceTime.toFixed(2)}ms`);
+      console.log(`📊 [inference-engine] Mode: ${mode}, Input length: ${voiceInput.length}`);
+      console.log(`🤖 [inference-engine] Current Model: ${this.aiController.getCurrentModelId()}`);
+
       const result = AIResponseParser.parseAIResponse(response, voiceInput, mode);
       resolve(result);
     } catch (error: any) {

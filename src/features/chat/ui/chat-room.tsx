@@ -11,12 +11,14 @@ export interface ChatMessage {
 interface ChatRoomProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
+  onClearChat?: () => void;
   isLoading?: boolean;
 }
 
 export const ChatRoom: React.FC<ChatRoomProps> = ({
   messages,
   onSendMessage,
+  onClearChat,
   isLoading = false
 }) => {
   const [inputValue, setInputValue] = useState('');
@@ -49,6 +51,20 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div className="chat-room">
+      {/* 채팅 헤더 */}
+      <div className="chat-header">
+        <span className="chat-title">AI 채팅</span>
+        {onClearChat && (
+          <button
+            onClick={onClearChat}
+            className="clear-chat-button"
+            title="채팅 기록 초기화"
+          >
+            🔄 새로고침
+          </button>
+        )}
+      </div>
+
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-welcome">

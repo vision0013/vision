@@ -185,6 +185,11 @@ export const useSidePanelController = () => {
     }
   }, [activeTabId]);
 
+  // 채팅 기록 초기화 핸들러
+  const handleClearChat = useCallback(() => {
+    setChatMessages([]);
+  }, []);
+
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 
   // ✨ [신규] AI 상태 체크를 포함한 음성인식 토글 함수 (로컬 상태 사용)
@@ -259,5 +264,6 @@ export const useSidePanelController = () => {
     chatMessages,
     isChatLoading,
     onSendChatMessage: handleSendChatMessage,
+    onClearChat: handleClearChat,
   };
 };

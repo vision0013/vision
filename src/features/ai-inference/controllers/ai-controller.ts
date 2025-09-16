@@ -100,8 +100,14 @@ export class AIController {
     const modelInfo = AVAILABLE_MODELS[modelId];
     if (!modelInfo) return false;
 
+    console.log(`🔄 [ai-controller] Switching from ${this.getCurrentModelId()} to ${modelId}`);
+
     await this.modelManager.switchModel(modelId);
     this.inferenceEngine.setLlm(null);
+
+    // 🎯 [수정] 활성 모델 상태 업데이트
+    setCurrentActiveModel(modelId);
+
 
     const modelExists = await this.modelManager.getModelStatus(modelId).then(s => s.state === 4);
     if (modelExists) {
@@ -124,12 +130,32 @@ export class AIController {
 }
 
 let aiControllerInstance: AIController | null = null;
+let currentActiveModelId: string = DEFAULT_MODEL_ID; // 현재 활성 모델 추적
 
 export function getAIController(modelId?: string): AIController {
-  if (!aiControllerInstance || (modelId && modelId !== aiControllerInstance.getCurrentModelId())) {
-    aiControllerInstance = new AIController({}, modelId);
+  const targetModelId = modelId || currentActiveModelId;
+
+  console.log(`🔍 [getAIController] Called with modelId: ${modelId}, currentActiveModelId: ${currentActiveModelId}, targetModelId: ${targetModelId}`);
+  console.log(`🔍 [getAIController] Existing instance model: ${aiControllerInstance?.getCurrentModelId() || 'none'}`);
+
+  // 인스턴스가 없거나, 다른 모델 ID를 요청하는 경우 새 인스턴스 생성
+  if (!aiControllerInstance || aiControllerInstance.getCurrentModelId() !== targetModelId) {
+    console.log(`🔄 [getAIController] Creating new controller for model: ${targetModelId}`);
+    console.log(`📊 [getAIController] Previous: ${aiControllerInstance?.getCurrentModelId() || 'none'} → New: ${targetModelId}`);
+    aiControllerInstance = new AIController({}, targetModelId);
+    currentActiveModelId = targetModelId;
+  } else {
+    console.log(`✅ [getAIController] Using existing controller for model: ${targetModelId}`);
   }
+
   return aiControllerInstance;
+}
+
+export function setCurrentActiveModel(modelId: string): void {
+  console.log(`🎯 [setCurrentActiveModel] Setting active model to: ${modelId}`);
+  currentActiveModelId = modelId;
+  // 기존 인스턴스도 리셋해서 새로운 모델로 생성되도록 함
+  aiControllerInstance = null;
 }
 
 export function resetAIController(): void {

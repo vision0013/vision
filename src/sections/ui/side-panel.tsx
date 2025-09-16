@@ -44,6 +44,7 @@ const SidePanel: React.FC = () => {
     chatMessages,
     isChatLoading,
     onSendChatMessage,
+    onClearChat,
   } = useSidePanelController();
   
   const [activeTab, setActiveTab] = useState('crawler');
@@ -108,6 +109,7 @@ const SidePanel: React.FC = () => {
           <ChatRoom
             messages={chatMessages}
             onSendMessage={onSendChatMessage}
+            onClearChat={onClearChat}
             isLoading={isChatLoading}
           />
         </div>
