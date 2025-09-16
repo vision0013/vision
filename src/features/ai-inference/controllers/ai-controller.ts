@@ -1,10 +1,8 @@
 // src/features/ai-inference/controllers/ai-controller.ts
 
-import { AIAnalysisResult, AIModelConfig, AIModelStatus, ModelDownloadProgress, LearningSnapshot } from '../types/ai-types';
+import { AIAnalysisResult, AIModelConfig, AIModelStatus, ModelDownloadProgress } from '../types/ai-types';
 import { CrawledItem, Mode } from '../../../types';
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from '../config/model-registry';
-import { LearningDataManager } from '../process/learning-data-manager';
-import { SnapshotManager } from '../process/snapshot-manager';
 import { ModelManager } from './model-manager';
 import { InferenceEngine } from './inference-engine';
 import { AI_PROMPTS } from '../config/ai-prompts';
@@ -12,7 +10,6 @@ import { AI_PROMPTS } from '../config/ai-prompts';
 export class AIController {
   private modelManager: ModelManager;
   private inferenceEngine: InferenceEngine;
-  private isLearning: boolean = false;
   private isInitialized: boolean = false; // ✨ [신규] 초기화 상태 플래그
 
   constructor(config: AIModelConfig = {}, modelId?: string) {
@@ -37,7 +34,7 @@ export class AIController {
 
   // ✨ [신규] 추론 가능 상태 확인 메소드
   public isReadyForInference(): boolean {
-    return this.isInitialized && !this.isLearning;
+    return this.isInitialized;
   }
 
   async downloadAndCacheModel(token: string, modelId?: string): Promise<boolean> {
@@ -81,42 +78,6 @@ export class AIController {
     return this.inferenceEngine.getAvailablePrompts();
   }
 
-  async learnFromFailedTests(failedTests: Array<{ command: string; expected: string; description: string }>): Promise<void> {
-    if (this.isLearning) return;
-    this.isLearning = true;
-    try {
-      const failedCommands = failedTests.map(t => t.command).join(', ');
-      const snapshotDescription = `Before learning ${failedTests.length} failed cases: ${failedCommands.substring(0, 100)}`;
-      await SnapshotManager.createSnapshot(snapshotDescription);
-      await LearningDataManager.learnFromFailedTests(failedTests);
-    } finally {
-      this.isLearning = false;
-    }
-  }
-
-  async clearLearnedExamples(): Promise<void> {
-    await LearningDataManager.clearLearnedExamples();
-  }
-
-  async getLearnedExamplesStats(): Promise<{count: number, size: number}> {
-    return LearningDataManager.getLearnedExamplesStats();
-  }
-
-  async createSnapshot(description?: string): Promise<LearningSnapshot> {
-    return SnapshotManager.createSnapshot(description);
-  }
-
-  async rollbackToSnapshot(snapshotId: string): Promise<boolean> {
-    return SnapshotManager.rollbackToSnapshot(snapshotId);
-  }
-
-  async getSnapshots(): Promise<LearningSnapshot[]> {
-    return SnapshotManager.getSnapshots();
-  }
-
-  async deleteSnapshot(snapshotId: string): Promise<boolean> {
-    return SnapshotManager.deleteSnapshot(snapshotId);
-  }
 
   getAvailableModels() {
     return AVAILABLE_MODELS;

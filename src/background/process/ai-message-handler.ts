@@ -121,13 +121,6 @@ function mapBackgroundActionToOffscreen(action: string): string {
     'getAIModelStatus': 'getModelStatus',
     'testAIAnalysis': 'analyzeIntent',
     'deleteAIModel': 'deleteModel',
-    'learnFromFailedTests': 'learnFromFailedTests', // 새로운 학습 기능
-    'getLearnedStats': 'getLearnedStats', // 학습 현황 조회
-    'clearLearnedExamples': 'clearLearnedExamples', // 학습 데이터 초기화
-    'createSnapshot': 'createSnapshot', // 스냅샷 생성
-    'getSnapshots': 'getSnapshots', // 스냅샷 목록
-    'rollbackSnapshot': 'rollbackSnapshot', // 스냅샷 복원
-    'deleteSnapshot': 'deleteSnapshot', // 스냅샷 삭제
     // 다중 모델 지원 새 액션들
     'switchAIModel': 'switchModel',
     'getAvailableModels': 'getAvailableModels',
@@ -151,13 +144,6 @@ function mapBackgroundActionToResponse(action: string): string {
     'loadAIModel': 'aiInitialized', // Load Model도 같은 응답 기대
     'testAIAnalysis': 'analysisResult',
     'getAIModelStatus': 'modelStatusResponse',
-    'learnFromFailedTests': 'learningCompleted', // 학습 완료 응답
-    'getLearnedStats': 'statsResponse', // 학습 현황 응답
-    'clearLearnedExamples': 'clearCompleted', // 초기화 완료 응답
-    'createSnapshot': 'snapshotCreated', // 스냅샷 생성 완료
-    'getSnapshots': 'snapshotsResponse', // 스냅샷 목록 응답
-    'rollbackSnapshot': 'rollbackCompleted', // 롤백 완료 응답
-    'deleteSnapshot': 'snapshotDeleted', // 스냅샷 삭제 완룼
     // 다중 모델 지원 새 응답들
     'switchAIModel': 'modelSwitched',
     'getAvailableModels': 'availableModelsResponse',

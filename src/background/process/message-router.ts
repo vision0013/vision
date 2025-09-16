@@ -26,15 +26,7 @@ export class MessageRouter {
     const aiActions = [
       'getAIModelStatus',
       'initializeAI',
-      'loadAIModel',
-      'testAIAnalysis',
-      'learnFromFailedTests',
-      'getLearnedStats',
-      'clearLearnedExamples',
-      'createSnapshot',
-      'getSnapshots',
-      'rollbackSnapshot',
-      'deleteSnapshot'
+      'loadAIModel'
     ];
     aiActions.forEach(action => {
       this.handlers.set(action, handleAIMessage);
@@ -95,15 +87,20 @@ export class MessageRouter {
    * 메시지를 적절한 핸들러로 라우팅
    */
   async route(
-    request: BackgroundMessage, 
+    request: BackgroundMessage,
     sender: chrome.runtime.MessageSender
   ): Promise<any> {
     const handler = this.handlers.get(request.action);
-    
+
     if (handler) {
         return await handler(request, sender);
     }
-    
+
+    // 🔇 응답 메시지들은 Offscreen → Panel 직접 통신이므로 경고 무시
+    if (request.action.endsWith('Response') || request.action.endsWith('response')) {
+      return { ignored: true, reason: 'Response message - handled by target component' };
+    }
+
     console.warn(`⚠️ [router] No handler for action: ${request.action}`);
     return { error: `Unknown action: ${request.action}` };
   }

@@ -28,3 +28,6 @@ dist-ssr
 !CLAUDE.md
 b.html
 blog.html
+
+# Deleted files from GitHub to prevent conflicts
+FOLDER-STRUCTURE.md

@@ -3,18 +3,11 @@
 import { CrawledItem, Mode } from '../../../types';
 import promptExamples from './prompt-examples.json';
 
-export interface PromptExample {
-  command: string;
-  action: string;
-  confidence: number;
-  reasoning: string;
-}
-
 // ✨ [수정] template 시그니처에 mode 추가
 export interface PromptTemplate {
   name: string;
   description: string;
-  template: (voiceInput: string, examples: PromptExample[], crawledItems: CrawledItem[], mode: Mode) => string;
+  template: (voiceInput: string, examples: any[], crawledItems: CrawledItem[], mode: Mode) => string;
 }
 
 function formatCrawledItemsForPrompt(items: CrawledItem[]): string {
@@ -39,7 +32,7 @@ export const AI_PROMPTS = {
     name: "Agent Planner",
     description: "사용자 명령과 현재 페이지의 DOM 요소를 바탕으로 행동 계획을 JSON 시퀀스로 생성합니다.",
     // ✨ [수정] template 함수가 mode를 받도록 변경
-    template: (voiceInput: string, _examples: PromptExample[], crawledItems: CrawledItem[], mode: Mode) => {
+    template: (voiceInput: string, _examples: any[], crawledItems: CrawledItem[], mode: Mode) => {
       const pageElements = formatCrawledItemsForPrompt(crawledItems);
 
       // ✨ [수정] 프롬프트에 현재 모드 정보를 포함시켜 AI의 행동을 유도
@@ -59,10 +52,14 @@ ${pageElements}
 Based on the user's command and the current mode, create a JSON object representing a sequence of actions.
 The valid actions are: "CLICK", "INPUT", "NAVIGATE", "SCROLL".
 
-**IMPORTANT: Navigation commands (back, forward, refresh) should ALWAYS use "NAVIGATE" action, NOT DOM elements.**
+**IMPORTANT RULES:**
+1. Navigation commands (back, forward, refresh) should ALWAYS use "NAVIGATE" action, NOT DOM elements.
+2. INPUT action should ONLY be used on elements with "inpt:t" property (input fields and textareas).
+3. CLICK action should be used for elements with "clk:t" property (buttons, links).
+4. If no suitable input field exists for text entry, suggest alternatives or indicate the task cannot be completed.
 
-- For "CLICK", specify the target 'id' of the element to click.
-- For "INPUT", specify the target 'id' and the 'value' to type.
+- For "CLICK", specify the target 'id' of a clickable element (must have "clk:t").
+- For "INPUT", specify the target 'id' of an input field (must have "inpt:t") and the 'value' to type.
 - For "NAVIGATE", specify 'type' for browser actions ("back", "forward", "refresh") - NO ID NEEDED.
 - For "SCROLL", specify 'direction' ("up" or "down") and optionally 'target' id for specific element scrolling.
 - The output MUST be a JSON object with a "plan" key, which is an array of action steps.
@@ -98,6 +95,6 @@ export function getPromptTemplate(promptName: keyof typeof AI_PROMPTS) {
   return AI_PROMPTS[promptName];
 }
 
-export function getBaseExamples(): PromptExample[] {
+export function getBaseExamples(): any[] {
   return promptExamples.baseExamples;
 }

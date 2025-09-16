@@ -71,6 +71,13 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
 
     console.log(`[Orchestrator] Filtered to ${finalItemsForAI.length} items for AI in ${mode} mode.`);
 
+    // 🐛 [DEBUG] 크롤링 데이터 상세 로그 (id 12, 13 주변)
+    finalItemsForAI.forEach(item => {
+      if (item.id >= 10 && item.id <= 15) {
+        console.log(`🔍 [DEBUG] Item ${item.id}: type=${item.type}, text="${item.text}", isClickable=${item.isClickable}, isInputtable=${item.isInputtable}`);
+      }
+    });
+
     // ✨ [수정] AI에게 현재 모드 정보 전달
     const response = await handleAIMessage({
       action: 'getAIPlan',

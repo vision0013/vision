@@ -5,7 +5,6 @@ import { CrawledItem, Mode } from '../../../types';
 import { AIAnalysisResult } from '../types/ai-types';
 import { getPromptTemplate, AI_PROMPTS, getBaseExamples } from '../config/ai-prompts';
 import { AIResponseParser } from '../process/ai-response-parser';
-import { LearningDataManager } from '../process/learning-data-manager';
 import type { AIController } from './ai-controller';
 
 /**
@@ -68,10 +67,8 @@ export class InferenceEngine {
   private async buildAnalysisPrompt(voiceInput: string, crawledItems: CrawledItem[], mode: Mode): Promise<string> {
     const promptTemplate = getPromptTemplate(this.currentPromptName);
     const baseExamples = getBaseExamples();
-    const learnedExamples = await LearningDataManager.getLearnedExamples();
-    const allExamples = [...learnedExamples, ...baseExamples];
     // ✨ [수정] template 함수에 mode 전달
-    return promptTemplate.template(voiceInput, allExamples, crawledItems, mode);
+    return promptTemplate.template(voiceInput, baseExamples, crawledItems, mode);
   }
 
   public setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {

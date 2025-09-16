@@ -2,12 +2,6 @@
 
 // OPFS 디렉토리 및 파일명 설정
 export const MODELS_DIR_NAME = 'models';
-export const LEARNED_EXAMPLES_FILE_NAME = 'learned-examples.json';
-export const LEARNED_EXAMPLES_BACKUP_FILE_NAME = 'learned-examples-backup.json';
-export const SNAPSHOTS_DIR_NAME = 'snapshots';
-
-// 스냅샷 관리 상수
-export const MAX_SNAPSHOTS = 20;
 
 // 모델별 파일명 생성 함수
 export function getModelFileName(modelId: string): string {

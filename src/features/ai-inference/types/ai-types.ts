@@ -83,23 +83,3 @@ export interface AnalysisComparison {
   finalResult: any;
 }
 
-export interface LearningSnapshot {
-  id: string;
-  name: string;
-  createdAt: Date;
-  examples: PromptExample[];
-  testResults?: {
-    accuracy: number;
-    totalTests: number;
-    correctTests: number;
-    avgConfidence: number;
-  };
-  description?: string;
-}
-
-export interface PromptExample {
-  command: string;
-  action: string;
-  confidence: number;
-  reasoning: string;
-}
