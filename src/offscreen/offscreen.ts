@@ -132,8 +132,7 @@ async function initializeOffscreen() {
               chrome.runtime.sendMessage({
                 action: 'analysisResult', // Background가 기대하는 응답 액션명
                 requestId: message.requestId,
-                result: result,
-                intent: result.intent  // 테스트 스크립트를 위한 추가 필드
+                result: result
               });
             } catch (error: any) {
               chrome.runtime.sendMessage({
