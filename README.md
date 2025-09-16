@@ -2,6 +2,9 @@
 
 음성으로 웹페이지를 제어하는 Chrome 확장 프로그램
 
+## 간단한 사용법 영상 및 보고서
+https://www.notion.so/AI-2707e2d62e01809d9d1eec0c57e2b078?source=copy_link
+
 ## 📋 목차
 - [설치 방법](#-설치-방법)
 - [AI 모델 설정](#-ai-모델-설정)
