@@ -91,7 +91,7 @@ export const inputAction = (
     foundElement.focus();
     
     const cleanInputText = inputText
-      .replace(/(써줘|써|입력해줘|입력|타이핑|해줘|주세요|줄)/g, '')
+      .replace(/(써줘|써|입력해줘|입력|타이핑|해줘|주세요|줄|검색|찾아줘|찾아|찾기)/g, '')
       .replace(/\s+/g, ' ')
       .trim();
     
