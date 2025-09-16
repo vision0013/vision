@@ -1,6 +1,8 @@
 import { CrawledItem } from '@/types';
 import { CrawlerState } from '../../crawling/types/crawler-state';
 import { createCrawlerState } from '../../crawling/process/state-management';
+// ✨ [신규] 공통 분석 함수 임포트
+import { getElementStateAndActionability } from '../../crawling/process/element-analysis';
 
 export function scanChildrenWithoutIds(parentElement: HTMLElement): CrawledItem[] {
   // 성능 최적화: 깊은 스캔 대신 직접 자식만 체크
@@ -45,6 +47,9 @@ export function walkSingleElement(el: HTMLElement, state: CrawlerState): void {
     parentId: null,
   };
   state.elMeta.set(ownerId, meta);
+
+  // ✨ [신규] 요소의 상태와 행동 가능성 정보 추출
+  const { state: elementState, isClickable, isInputtable } = getElementStateAndActionability(el);
   
   // TARGET_TAGS 확인하여 크롤링 아이템 생성
   if (['a', 'button', 'input', 'textarea', 'select'].includes(tag)) {
@@ -64,7 +69,11 @@ export function walkSingleElement(el: HTMLElement, state: CrawlerState): void {
           type: 'link',
           href,
           text,
-          hidden: !isVisible
+          hidden: !isVisible,
+          // ✨ [신규] 타입 에러 해결을 위해 새로운 속성 추가
+          state: elementState,
+          isClickable,
+          isInputtable,
         });
       }
     }

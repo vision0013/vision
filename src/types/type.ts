@@ -26,6 +26,17 @@ export interface CrawledItem {
   // 입력 요소 관련 필드
   inputType?: string;
   placeholder?: string;
+
+  // ✨ [신규] 요소의 현재 상태
+  state: {
+    isDisabled: boolean;
+    isChecked?: boolean;
+    isFocused: boolean;
+  };
+
+  // ✨ [신규] AI의 판단을 돕는 행동 가능성
+  isClickable: boolean;
+  isInputtable: boolean;
 }
 
 export interface AnalysisResult {

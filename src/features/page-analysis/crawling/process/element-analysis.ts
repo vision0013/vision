@@ -31,3 +31,27 @@ export function bbox(el: HTMLElement): BoundingBox {
     height: Math.round(r.height)
   };
 }
+
+/**
+ * ✨ [신규] 요소의 상태와 행동 가능성을 분석하여 공통으로 사용
+ */
+export function getElementStateAndActionability(el: HTMLElement) {
+  const tag = el.tagName.toLowerCase();
+  const role = el.getAttribute('role');
+
+  const isButton = tag === 'button' || role === 'button';
+  const isLink = tag === 'a' && el.hasAttribute('href');
+
+  const isDisabled = (el as HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).disabled || false;
+
+  const state = {
+    isDisabled: isDisabled,
+    isChecked: (el as HTMLInputElement).checked, // input이 아니면 undefined
+    isFocused: document.activeElement === el,
+  };
+
+  const isClickable = !isDisabled && (isButton || isLink);
+  const isInputtable = !isDisabled && (tag === 'input' || tag === 'textarea');
+
+  return { state, isClickable, isInputtable };
+}
