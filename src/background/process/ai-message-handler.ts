@@ -93,9 +93,9 @@ export async function handleAIMessage(
       };
       chrome.runtime.onMessage.addListener(listener);
       
-      // 다운로드는 12분, AI 추론은 60초, 기타는 30초 타임아웃
+      // 다운로드는 12분, AI 추론은 30초, 기타는 20초 타임아웃
       const timeoutDuration = request.action === 'downloadAIModel' ? 12 * 60 * 1000 :
-                             request.action === 'getAIPlan' ? 60000 : 30000;
+                             request.action === 'getAIPlan' ? 30000 : 20000;
       timeoutId = setTimeout(() => {
         chrome.runtime.onMessage.removeListener(listener);
         resolve({ error: 'AI operation timeout' });
