@@ -2,14 +2,9 @@ import { CrawledItem } from '@/types';
 import { MAX_NODES, TARGET_TAGS, SKIP_TAGS, IFRAME_TAGS } from '../../crawling/config/constants';
 import { CrawlerState } from '../types/crawler-state';
 import { normText } from './text-processing';
-import { isCurrentlyVisible, roleOf, bbox, getElementStateAndActionability } from './element-analysis';
+import { getElementStateAndActionability, isCurrentlyVisible, roleOf, bbox } from './element-analysis';
 import { coordinateTransformer } from './coordinate-transformer';
 
-
-
-/**
- * DOM 요소를 재귀적으로 탐색하여 크롤링 아이템을 생성합니다.
- */
 export function walkElement(
   el: Element, 
   state: CrawlerState, 
@@ -27,9 +22,10 @@ export function walkElement(
   if (SKIP_TAGS.has(tag)) return;
   if (getComputedStyle(el).display === 'none') return;
 
-  const ownerId = state.nextElementId++;
-  state.elIdMap.set(el, ownerId);
-  el.setAttribute('data-crawler-id', ownerId.toString());
+  // ✨ [수정] ownerId를 유일한 ID로 사용
+  const id = state.nextElementId++;
+  state.elIdMap.set(el, id);
+  el.setAttribute('data-crawler-id', id.toString());
 
   let elementRect = bbox(el);
   if (coordinateTransformer.needsTransformation(el)) {
@@ -39,7 +35,6 @@ export function walkElement(
     }
   }
 
-  // ✨ [신규] 요소의 상태와 행동 가능성 정보 추출
   const { state: elementState, isClickable, isInputtable } = getElementStateAndActionability(el);
 
   const meta = {
@@ -50,10 +45,10 @@ export function walkElement(
   };
 
   if (IFRAME_TAGS.has(tag)) {
-    // ... (iframe 처리 로직은 기존과 동일) ...
+    // ... iframe 로직 ...
     return;
   }
-  state.elMeta.set(ownerId, meta);
+  state.elMeta.set(id, meta);
 
   const isTarget = TARGET_TAGS.has(tag);
   const isLink = tag === 'a';
@@ -61,73 +56,55 @@ export function walkElement(
 
   if (isTarget) {
       const isVisible = isCurrentlyVisible(el);
-      
+      const commonProps = { id, ownerId: id, parentId: parentElId, tag, role: meta.role, rect: meta.rect, hidden: !isVisible, state: elementState, isClickable, isInputtable };
+
       if (tag === "img") {
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "image", 
+            ...commonProps, type: "image", 
             alt: normText(el.getAttribute("alt")),
             title: normText(el.getAttribute("title")),
-            src: el.getAttribute("src") || "",
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            src: el.getAttribute("src") || ""
           });
       }
 
       if (isLink) {
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "link", 
+            ...commonProps, type: "link", 
             href: el.getAttribute("href") || "", 
-            text: normText(el.textContent),
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            text: normText(el.textContent)
           });
       }
 
       if (isButton) {
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "button", 
-            label: normText(el.getAttribute("aria-label") || el.textContent || "") || "(no label)",
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            ...commonProps, type: "button", 
+            label: normText(el.getAttribute("aria-label") || el.textContent || "") || "(no label)"
           });
       }
 
       if (tag === "input") {
           const input = el as HTMLInputElement;
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "input", 
+            ...commonProps, type: "input", 
             inputType: input.type || "text",
             placeholder: normText(input.placeholder || ""),
-            label: normText(el.getAttribute("aria-label") || input.name || "") || normText(input.placeholder || "") || `[${input.type} input]`,
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            label: normText(el.getAttribute("aria-label") || input.name || "") || normText(input.placeholder || "") || `[${input.type} input]`
           });
       }
 
       if (tag === "textarea") {
           const textarea = el as HTMLTextAreaElement;
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "textarea", 
+            ...commonProps, type: "textarea", 
             placeholder: normText(textarea.placeholder || ""),
-            label: normText(el.getAttribute("aria-label") || textarea.name || "") || normText(textarea.placeholder || "") || "[textarea]",
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            label: normText(el.getAttribute("aria-label") || textarea.name || "") || normText(textarea.placeholder || "") || "[textarea]"
           });
       }
 
       if (tag === "select") {
-          const select = el as HTMLSelectElement;
           state.items.push({ 
-            id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-            type: "select", 
-            label: normText(el.getAttribute("aria-label") || select.name || "") || "[select]",
-            hidden: !isVisible,
-            state: elementState, isClickable, isInputtable
+            ...commonProps, type: "select", 
+            label: normText(el.getAttribute("aria-label") || (el as HTMLSelectElement).name || "") || "[select]"
           });
       }
 
@@ -137,11 +114,7 @@ export function walkElement(
                   const t = normText(node.nodeValue || "");
                   if (t) {
                       state.items.push({ 
-                        id: state.nextItemId++, ownerId, parentId: parentElId, tag, role: meta.role, rect: meta.rect, 
-                        type: "text", 
-                        text: t,
-                        hidden: !isVisible,
-                        state: elementState, isClickable, isInputtable
+                        ...commonProps, type: "text", text: t
                       });
                   }
               }
@@ -151,7 +124,7 @@ export function walkElement(
 
   for (const child of el.children) {
     if (state.visited > MAX_NODES) break;
-    walkElement(child, state, ownerId, isLink || isDescendantOfLink, isButton || isDescendantOfButton);
+    walkElement(child, state, id, isLink || isDescendantOfLink, isButton || isDescendantOfButton);
   }
 }
 

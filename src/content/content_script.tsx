@@ -2,10 +2,65 @@
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
 
-// ✨ [BUGFIX] iframe 내부에서 스크립트가 실행되는 것을 방지
-if (window.self !== window.top) {
-  console.log('🚫 [content] Running in iframe, stopping execution.');
-} else {
+// ✨ [리팩터링] 메시지 리스너는 모든 프레임에서 실행되도록 분리
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  try {
+    switch (request.action) {
+      // ✨ 정밀 실행기: CLICK
+      case 'execute_click': {
+        const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLElement;
+        if (element) {
+          console.log(`🖱️ [content] Executing CLICK on ID: ${request.crawlerId}`, element);
+          element.click();
+          sendResponse({ success: true });
+        } else {
+          // 이 프레임에 요소가 없을 수 있으므로 에러 대신 단순 로그 기록
+          // console.log(`[content] CLICK: Element with ID ${request.crawlerId} not found in this frame.`);
+          sendResponse({ success: false, error: 'Element not found in this frame' });
+        }
+        return true;
+      }
+
+      // ✨ 정밀 실행기: INPUT
+      case 'execute_input': {
+        const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLInputElement | HTMLTextAreaElement;
+        if (element) {
+          console.log(`⌨️ [content] Executing INPUT on ID: ${request.crawlerId} with value: "${request.value}"`, element);
+          element.value = request.value;
+          element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          sendResponse({ success: true });
+        } else {
+          // console.log(`[content] INPUT: Element with ID ${request.crawlerId} not found in this frame.`);
+          sendResponse({ success: false, error: 'Element not found in this frame' });
+        }
+        return true;
+      }
+
+      // ✨ 정밀 실행기: NAVIGATE (최상위 프레임에서만 의미 있음)
+      case 'execute_navigate': {
+        if (window.self === window.top) {
+          console.log(`🚀 [content] Executing NAVIGATE to: ${request.url}`);
+          if (request.url) {
+            window.location.href = request.url;
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'No URL provided' });
+          }
+        }
+        return true;
+      }
+    }
+  } catch (error: any) {
+    console.error('❌ Message listener error:', error);
+    sendResponse({ success: false, error: error.message });
+    return true;
+  }
+});
+
+// ✨ [리팩터링] 크롤러 및 페이지 분석 로직은 최상위 프레임에서만 실행
+if (window.self === window.top) {
+  console.log('✅ [content] Running in top-level frame. Initializing crawler and other listeners.');
+
   let dynamicObserverActive = false;
 
   const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {
@@ -29,10 +84,9 @@ if (window.self !== window.top) {
   };
 
   const runCrawler = async () => {
-    if (dynamicObserverActive) {
-      stopDynamicObserver();
-      dynamicObserverActive = false;
-    }
+    if (dynamicObserverActive) stopDynamicObserver();
+    dynamicObserverActive = false;
+
     const analysisResult = await pageCrawler.analyze();
     const success = await safeRuntimeMessage({ 
       action: 'crawlComplete', 
@@ -41,6 +95,7 @@ if (window.self !== window.top) {
         viewport: { width: window.innerWidth, height: window.innerHeight }
       } 
     });
+
     if (success) {
       startDynamicObserver(pageCrawler, async (newItems) => {
         await safeRuntimeMessage({ action: 'addNewItems', data: newItems });
@@ -49,7 +104,8 @@ if (window.self !== window.top) {
     }
   };
 
-  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  // 크롤링과 관련 없는 다른 메시지 리스너들
+  chrome.runtime.onMessage.addListener((request) => {
     try {
       switch (request.action) {
         case 'runCrawler':
@@ -78,44 +134,9 @@ if (window.self !== window.top) {
             removeHighlightFromElement();
           }
           break;
-
-        case 'execute_click': {
-          const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLElement;
-          if (element) {
-            element.click();
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false, error: `Element with ID ${request.crawlerId} not found` });
-          }
-          return true;
-        }
-
-        case 'execute_input': {
-          const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLInputElement | HTMLTextAreaElement;
-          if (element) {
-            element.value = request.value;
-            element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false, error: `Element with ID ${request.crawlerId} not found` });
-          }
-          return true;
-        }
-
-        case 'execute_navigate': {
-          if (request.url) {
-            window.location.href = request.url;
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false, error: 'No URL provided' });
-          }
-          return true;
-        }
       }
-    } catch (error: any) {
-      console.error('❌ Message listener error:', error);
-      sendResponse({ success: false, error: error.message });
-      return true;
+    } catch (e) {
+      console.error('❌ Top-level message listener error:', e);
     }
   });
 
@@ -124,4 +145,7 @@ if (window.self !== window.top) {
   });
 
   runCrawler();
+
+} else {
+  console.log('🚫 [content] Running in iframe. Only execution listeners are active.');
 }
