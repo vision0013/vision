@@ -100,7 +100,10 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
           await sendActionToContentScript(tabId, { action: 'execute_input', crawlerId: step.id, value: step.value });
           break;
         case 'NAVIGATE':
-          await sendActionToContentScript(tabId, { action: 'execute_navigate', url: step.url });
+          await sendActionToContentScript(tabId, { action: 'execute_navigate', type: step.type });
+          break;
+        case 'SCROLL':
+          await sendActionToContentScript(tabId, { action: 'execute_scroll', direction: step.direction, target: step.target });
           break;
         default:
           console.warn(`⚠️ [Orchestrator] Unknown action in AI plan:`, step);

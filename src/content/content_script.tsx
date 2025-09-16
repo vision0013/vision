@@ -39,13 +39,56 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       // ✨ 정밀 실행기: NAVIGATE (최상위 프레임에서만 의미 있음)
       case 'execute_navigate': {
         if (window.self === window.top) {
-          console.log(`🚀 [content] Executing NAVIGATE to: ${request.url}`);
-          if (request.url) {
+          console.log(`🚀 [content] Executing NAVIGATE type: ${request.type}`);
+          if (request.type === 'back') {
+            if (window.history.length > 1) {
+              window.history.back();
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: 'Cannot go back' });
+            }
+          } else if (request.type === 'forward') {
+            window.history.forward();
+            sendResponse({ success: true });
+          } else if (request.type === 'refresh') {
+            window.location.reload();
+            sendResponse({ success: true });
+          } else if (request.url) {
+            // 기존 URL 네비게이션 지원 (혹시 필요할 경우)
             window.location.href = request.url;
             sendResponse({ success: true });
           } else {
-            sendResponse({ success: false, error: 'No URL provided' });
+            sendResponse({ success: false, error: 'No navigation type or URL provided' });
           }
+        }
+        return true;
+      }
+
+      // ✨ 정밀 실행기: SCROLL
+      case 'execute_scroll': {
+        console.log(`🔄 [content] Executing SCROLL direction: ${request.direction}, target: ${request.target}`);
+
+        // 특정 요소로 스크롤
+        if (request.target) {
+          const element = document.querySelector(`[data-crawler-id="${request.target}"]`) as HTMLElement;
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Target element not found' });
+          }
+        } else {
+          // 페이지 전체 스크롤
+          const scrollDistance = 300;
+          const currentY = window.scrollY;
+          const direction = request.direction || 'down';
+          const targetY = direction === 'up' ? currentY - scrollDistance : currentY + scrollDistance;
+
+          window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth'
+          });
+          sendResponse({ success: true });
         }
         return true;
       }

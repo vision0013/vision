@@ -114,5 +114,15 @@ async function executeVoiceActionStep(
     payload.originalCommand = step.value;
   }
 
+  // scroll_action의 경우 direction 설정
+  if (step.action === 'scroll_action' && step.value) {
+    payload.direction = step.value as 'up' | 'down';
+  }
+
+  // navigation_action의 경우 targetText를 action type으로 설정
+  if (step.action === 'navigation_action' && step.target) {
+    payload.targetText = step.target; // "back", "forward", "refresh"
+  }
+
   return processVoiceCommand(payload);
 }

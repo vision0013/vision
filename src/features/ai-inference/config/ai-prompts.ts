@@ -57,15 +57,29 @@ ${pageElements}
 
 **TASK**
 Based on the user's command and the current mode, create a JSON object representing a sequence of actions.
-The valid actions are: "CLICK", "INPUT", "NAVIGATE".
+The valid actions are: "CLICK", "INPUT", "NAVIGATE", "SCROLL".
 
 - For "CLICK", specify the target 'id' of the element to click.
 - For "INPUT", specify the target 'id' and the 'value' to type.
+- For "NAVIGATE", specify 'type' for browser actions ("back", "forward", "refresh").
+- For "SCROLL", specify 'direction' ("up" or "down") and optionally 'target' id for specific element scrolling.
 - The output MUST be a JSON object with a "plan" key, which is an array of action steps.
 
-**EXAMPLE**
+**EXAMPLES**
 User Command: "Search for smartphones"
 Your Plan: { "plan": [{ "action": "INPUT", "id": 12, "value": "smartphones" }, { "action": "CLICK", "id": 13 }] }
+
+User Command: "뒤로 가기"
+Your Plan: { "plan": [{ "action": "NAVIGATE", "type": "back" }] }
+
+User Command: "앞으로 가기"
+Your Plan: { "plan": [{ "action": "NAVIGATE", "type": "forward" }] }
+
+User Command: "새로고침"
+Your Plan: { "plan": [{ "action": "NAVIGATE", "type": "refresh" }] }
+
+User Command: "아래로 스크롤해줘"
+Your Plan: { "plan": [{ "action": "SCROLL", "direction": "down" }] }
 
 **YOUR TURN**
 User Command: "${voiceInput}"

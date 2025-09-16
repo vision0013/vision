@@ -167,6 +167,38 @@ export const AI_TEST_CASES_BASIC: AITestCase[] = [
     expected: "navigation",
     description: "앞으로 가기",
     category: "navigation"
+  },
+
+  // scroll (5개)
+  {
+    command: "아래로 스크롤해줘",
+    expected: "scroll",
+    description: "기본 아래 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "위로 올려줘",
+    expected: "scroll",
+    description: "위로 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "페이지 내려줘",
+    expected: "scroll",
+    description: "페이지 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "스크롤 다운",
+    expected: "scroll",
+    description: "영어식 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "밑으로 내려줘",
+    expected: "scroll",
+    description: "자연어 스크롤",
+    category: "scroll"
   }
 ];
 

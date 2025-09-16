@@ -2,10 +2,13 @@
 
 // ✨ [신규] AI가 생성하는 행동 계획의 단일 스텝
 export interface AIActionStep {
-  action: 'CLICK' | 'INPUT' | 'NAVIGATE';
+  action: 'CLICK' | 'INPUT' | 'NAVIGATE' | 'SCROLL';
   id?: number;      // CLICK, INPUT 대상 요소의 ID
   value?: string;   // INPUT 액션에 사용될 값
   url?: string;     // NAVIGATE 액션에 사용될 URL
+  type?: string;    // NAVIGATE 액션의 타입 (back, forward, refresh)
+  direction?: string; // SCROLL 액션의 방향 (up, down)
+  target?: string;  // SCROLL 액션의 특정 요소 타겟 (선택사항)
   reasoning?: string; // AI가 이 행동을 선택한 이유
 }
 

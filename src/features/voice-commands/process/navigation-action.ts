@@ -3,12 +3,31 @@ import { VoiceCommandResult } from "../types/voice-types";
 import { findBestMatch } from "./element-matcher";
 
 export const navigationAction = (
-  targetText: string, 
+  targetText: string,
   items: CrawledItem[]
 ): VoiceCommandResult => {
   const lowerText = targetText.toLowerCase();
-  
-  // 네비게이션 명령 분석
+
+  // AI에서 전달된 직접적인 액션 타입 처리
+  if (targetText === 'back') {
+    if (window.history.length > 1) {
+      window.history.back();
+      return { type: "navigation_executed", action: "back" };
+    }
+    return { type: "not_found", message: "뒤로 갈 수 있는 페이지가 없습니다" };
+  }
+
+  if (targetText === 'forward') {
+    window.history.forward();
+    return { type: "navigation_executed", action: "forward" };
+  }
+
+  if (targetText === 'refresh') {
+    window.location.reload();
+    return { type: "navigation_executed", action: "refresh" };
+  }
+
+  // 기존 키워드 기반 네비게이션 명령 분석 (폴백)
   if (lowerText.includes('뒤로') || lowerText.includes('돌아가')) {
     if (window.history.length > 1) {
       window.history.back();

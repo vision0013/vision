@@ -50,8 +50,15 @@ export function mapAIToVoiceActions(aiResult: AIAnalysisResult, userInput: strin
       case 'NAVIGATE':
         return {
           action: 'navigation_action',
-          target: step.url,
+          target: step.type, // "back", "forward", "refresh"
           priority: 'high'
+        };
+      case 'SCROLL':
+        return {
+          action: 'scroll_action',
+          target: step.target || '', // 특정 요소 ID (선택사항)
+          value: step.direction, // "up" or "down"
+          priority: 'medium'
         };
       default:
         // 알 수 없는 액션은 find로 처리
