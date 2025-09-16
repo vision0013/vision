@@ -1,12 +1,14 @@
 // Background 전용 타입 정의 (기존 타입 최대한 재사용)
 
 import { AIAnalysisResult } from '../../features/ai-inference/types/ai-types';
+import { CrawledItem } from '../../types';
 
 // Background 고유 상태 관리 타입들
 export interface TabState {
   lastUrl?: string;
   debounceTimeout?: NodeJS.Timeout;
   activeElement?: ActiveElementState;
+  crawledItems?: CrawledItem[]; // ✨ [신규] 크롤링된 데이터 저장
 }
 
 export interface ActiveElementState {
@@ -31,9 +33,10 @@ export interface VoiceCommandRequest extends BackgroundMessage {
 }
 
 export interface AIMessageRequest extends BackgroundMessage {
-  action: 'getAIModelStatus' | 'deleteAIModel' | 'downloadAIModel' | 'initializeAI' | 'loadAIModel' | 'testAIAnalysis';
+  action: string; // 더 이상 특정 문자열 리터럴에 얽매이지 않도록 일반화
   token?: string;
   command?: string;
+  crawledItems?: CrawledItem[]; // ✨ [신규] 크롤링 데이터 추가
 }
 
 export interface HighlightRequest extends BackgroundMessage {

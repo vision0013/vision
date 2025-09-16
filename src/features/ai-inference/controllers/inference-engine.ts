@@ -1,6 +1,7 @@
 // src/features/ai-inference/controllers/inference-engine.ts
 
 import { LlmInference } from '@mediapipe/tasks-genai';
+import { CrawledItem } from '../../../types'; // ✨ [신규] 타입 임포트
 import { AIAnalysisResult } from '../types/ai-types';
 import { getPromptTemplate, AI_PROMPTS, getBaseExamples } from '../config/ai-prompts';
 import { AIResponseParser } from '../process/ai-response-parser';
@@ -11,13 +12,16 @@ import { LearningDataManager } from '../process/learning-data-manager';
  */
 export class InferenceEngine {
   private isAnalyzing = false;
-  private analysisQueue: Array<{
+  // ✨ [수정] 큐에 crawledItems 추가
+  private analysisQueue: Array<{ 
     voiceInput: string;
+    crawledItems: CrawledItem[];
     resolve: (result: AIAnalysisResult) => void;
     reject: (error: Error) => void;
   }> = [];
 
-  private currentPromptName: keyof typeof AI_PROMPTS = 'EXAMPLE_DRIVEN_CLASSIFIER';
+  // ✨ [수정] 기본 프롬프트를 AGENT_PLANNER로 변경
+  private currentPromptName: keyof typeof AI_PROMPTS = 'AGENT_PLANNER';
 
   constructor(private llm: LlmInference | null) {}
 
@@ -25,13 +29,14 @@ export class InferenceEngine {
     this.llm = llm;
   }
 
-  async analyzeIntent(voiceInput: string): Promise<AIAnalysisResult> {
+  // ✨ [수정] crawledItems를 인자로 받도록 변경
+  async analyzeIntent(voiceInput: string, crawledItems: CrawledItem[]): Promise<AIAnalysisResult> {
     if (!this.llm) {
       throw new Error('AI model is not loaded.');
     }
 
     return new Promise((resolve, reject) => {
-      this.analysisQueue.push({ voiceInput, resolve, reject });
+      this.analysisQueue.push({ voiceInput, crawledItems, resolve, reject });
       this.processAnalysisQueue();
     });
   }
@@ -42,10 +47,12 @@ export class InferenceEngine {
     }
 
     this.isAnalyzing = true;
-    const { voiceInput, resolve, reject } = this.analysisQueue.shift()!;
+    // ✨ [수정] 큐에서 crawledItems 꺼내기
+    const { voiceInput, crawledItems, resolve, reject } = this.analysisQueue.shift()!;
 
     try {
-      const prompt = await this.buildAnalysisPrompt(voiceInput);
+      // ✨ [수정] buildAnalysisPrompt에 crawledItems 전달
+      const prompt = await this.buildAnalysisPrompt(voiceInput, crawledItems);
       const response = await this.llm.generateResponse(prompt);
       const result = AIResponseParser.parseAIResponse(response, voiceInput);
       resolve(result);
@@ -58,12 +65,14 @@ export class InferenceEngine {
     }
   }
 
-  private async buildAnalysisPrompt(voiceInput: string): Promise<string> {
+  // ✨ [수정] buildAnalysisPrompt 시그니처 변경
+  private async buildAnalysisPrompt(voiceInput: string, crawledItems: CrawledItem[]): Promise<string> {
     const promptTemplate = getPromptTemplate(this.currentPromptName);
     const baseExamples = getBaseExamples();
     const learnedExamples = await LearningDataManager.getLearnedExamples();
     const allExamples = [...learnedExamples, ...baseExamples];
-    return promptTemplate.template(voiceInput, allExamples);
+    // ✨ [수정] template 함수에 crawledItems 전달
+    return promptTemplate.template(voiceInput, allExamples, crawledItems);
   }
 
   public setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {

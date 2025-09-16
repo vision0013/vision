@@ -1,6 +1,7 @@
 // 탭 상태 관리자 - Map 기반 고성능 상태 관리
 
 import { TabState, ActiveElementState } from '../../types/background-types';
+import { CrawledItem } from '../../../types';
 
 export class TabStateManager {
   private states = new Map<number, TabState>();
@@ -49,6 +50,34 @@ export class TabStateManager {
   }
 
   /**
+   * ✨ [수정] 크롤링된 데이터 전체를 설정 (덮어쓰기)
+   */
+  setCrawledData(tabId: number, items: CrawledItem[]): void {
+    const state = this.getOrCreate(tabId);
+    state.crawledItems = items;
+    console.log(`[TabStateManager] Set ${items.length} crawled items for tab ${tabId}`);
+  }
+
+  /**
+   * ✨ [신규] 크롤링된 데이터 추가 (기존 데이터에 병합)
+   */
+  appendCrawledData(tabId: number, newItems: CrawledItem[]): void {
+    const state = this.getOrCreate(tabId);
+    if (!state.crawledItems) {
+      state.crawledItems = [];
+    }
+    state.crawledItems.push(...newItems);
+    console.log(`[TabStateManager] Appended ${newItems.length} new items for tab ${tabId}. Total: ${state.crawledItems.length}`);
+  }
+
+  /**
+   * 크롤링된 데이터 조회
+   */
+  getCrawledData(tabId: number): CrawledItem[] | undefined {
+    return this.states.get(tabId)?.crawledItems;
+  }
+
+  /**
    * 탭 상태 전체 조회
    */
   getTabState(tabId: number): TabState | undefined {
@@ -60,10 +89,14 @@ export class TabStateManager {
    */
   cleanup(tabId: number): void {
     const state = this.states.get(tabId);
-    if (state?.debounceTimeout) {
-      clearTimeout(state.debounceTimeout);
+    if (state) {
+      if (state.debounceTimeout) {
+        clearTimeout(state.debounceTimeout);
+      }
+      state.crawledItems = undefined;
     }
     this.states.delete(tabId);
+    console.log(`[TabStateManager] Cleaned up state for tab ${tabId}`);
   }
 
   /**
@@ -78,7 +111,7 @@ export class TabStateManager {
    */
   private getOrCreate(tabId: number): TabState {
     if (!this.states.has(tabId)) {
-      this.states.set(tabId, {});
+      this.states.set(tabId, { crawledItems: [] });
     }
     return this.states.get(tabId)!;
   }

@@ -1,4 +1,5 @@
 // 크롤링 관련 메시지 처리 핸들러
+import { tabStateManager } from '../controllers/managers/tab-state-manager';
 
 /**
  * 크롤링 완료 메시지 처리
@@ -17,6 +18,11 @@ export async function handleCrawlComplete(
   
   console.log(`📊 [crawl-handler] Crawl completed for tab ${tabId}:`, analysisResult.items?.length, 'items');
   
+  // ✨ [신규] TabStateManager에 전체 크롤링 데이터 저장
+  if (analysisResult.items) {
+    tabStateManager.setCrawledData(tabId, analysisResult.items);
+  }
+
   try {
     // Panel에 크롤링 결과 전달 (기존 액션명 유지)
     chrome.runtime.sendMessage({
@@ -30,7 +36,7 @@ export async function handleCrawlComplete(
     
   } catch (error) {
     // Panel이 닫혀있을 수 있음 (정상)
-    console.log('[crawl-handler] Panel not open, crawl result stored');
+    console.log('[crawl-handler] Panel not open, crawl result stored in TabStateManager');
     return true;
   }
 }
@@ -45,13 +51,16 @@ export async function handleAddNewItems(
   const { data: newItems } = request;
   const tabId = sender.tab?.id;
   
-  if (!tabId) {
-    console.warn('❌ [crawl-handler] No tab ID for add new items');
+  if (!tabId || !newItems || newItems.length === 0) {
+    console.warn('❌ [crawl-handler] No tab ID or new items to add');
     return false;
   }
   
-  console.log(`➕ [crawl-handler] Adding ${newItems?.length || 0} new items for tab ${tabId}`);
+  console.log(`➕ [crawl-handler] Adding ${newItems.length} new items for tab ${tabId}`);
   
+  // ✨ [신규] TabStateManager에 새로운 아이템 추가
+  tabStateManager.appendCrawledData(tabId, newItems);
+
   try {
     // Panel에 새 아이템 전달
     chrome.runtime.sendMessage({
@@ -65,7 +74,7 @@ export async function handleAddNewItems(
     
   } catch (error) {
     // Panel이 닫혀있을 수 있음 (정상)
-    console.log('[crawl-handler] Panel not open, new items stored');
+    console.log('[crawl-handler] Panel not open, new items stored in TabStateManager');
     return true;
   }
 }

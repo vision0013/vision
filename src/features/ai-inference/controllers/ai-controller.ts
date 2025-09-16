@@ -1,6 +1,7 @@
 // src/features/ai-inference/controllers/ai-controller.ts
 
 import { AIAnalysisResult, AIModelConfig, AIModelStatus, ModelDownloadProgress, LearningSnapshot } from '../types/ai-types';
+import { CrawledItem } from '../../../types';
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from '../config/model-registry';
 import { LearningDataManager } from '../process/learning-data-manager';
 import { SnapshotManager } from '../process/snapshot-manager';
@@ -63,8 +64,8 @@ export class AIController {
     return this.modelManager.getDownloadProgress();
   }
 
-  async analyzeIntent(voiceInput: string): Promise<AIAnalysisResult> {
-    return this.inferenceEngine.analyzeIntent(voiceInput);
+  async analyzeIntent(voiceInput: string, crawledItems: CrawledItem[]): Promise<AIAnalysisResult> {
+    return this.inferenceEngine.analyzeIntent(voiceInput, crawledItems);
   }
 
   setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {

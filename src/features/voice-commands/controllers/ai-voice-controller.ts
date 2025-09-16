@@ -33,7 +33,7 @@ export async function processAIVoiceCommand(
       })];
     }
 
-    const aiResult = await aiController.analyzeIntent(userInput);
+    const aiResult = await aiController.analyzeIntent(userInput, items);
     console.log(`🧠 [CONTROLLER] AI analysis result:`, aiResult);
 
     // 2. AI 결과를 voice-commands 액션 시퀀스로 변환

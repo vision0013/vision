@@ -54,7 +54,8 @@ export async function handleAIMessage(
       command: request.command,
       failedTests: request.failedTests,
       snapshotId: request.snapshotId,
-      description: request.description
+      description: request.description,
+      crawledItems: request.crawledItems // ✨ [신규] 크롤링 데이터 추가
     };
     // 중복 디버깅: 전송 메시지 로그
     console.log(`📤 [ai-handler] Sending to Offscreen:`, messageToSend);
@@ -96,6 +97,7 @@ export async function handleAIMessage(
  */
 function mapBackgroundActionToOffscreen(action: string): string {
   const actionMap: Record<string, string> = {
+    'getAIPlan': 'analyzeIntent', // ✨ [신규] AI 계획 요청
     'downloadAIModel': 'downloadModel',
     'initializeAI': 'initializeAI',
     'loadAIModel': 'initializeAI', // Load Model도 같은 Offscreen 액션 사용
@@ -125,6 +127,7 @@ function mapBackgroundActionToOffscreen(action: string): string {
  */
 function mapBackgroundActionToResponse(action: string): string {
   const responseMap: Record<string, string> = {
+    'getAIPlan': 'analysisResult', // ✨ [신규] AI 계획 결과
     'downloadAIModel': 'modelLoaded',
     'deleteAIModel': 'modelDeleted',
     'initializeAI': 'aiInitialized',

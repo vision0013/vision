@@ -119,7 +119,16 @@ async function initializeOffscreen() {
           (async () => {
             try {
               const command = message.command || message.voiceInput;
-              const result = await aiController.analyzeIntent(command);
+              // ✨ [수정] 메시지에서 crawledItems 추출
+              const crawledItems = message.crawledItems;
+
+              if (!command || !crawledItems) {
+                throw new Error('Command or crawledItems is missing in analyzeIntent request.');
+              }
+
+              // ✨ [수정] analyzeIntent 호출 시 crawledItems 전달
+              const result = await aiController.analyzeIntent(command, crawledItems);
+              
               chrome.runtime.sendMessage({
                 action: 'analysisResult', // Background가 기대하는 응답 액션명
                 requestId: message.requestId,
