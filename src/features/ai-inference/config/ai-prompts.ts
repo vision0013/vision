@@ -91,6 +91,27 @@ Your Plan:
 <start_of_turn>model`;
     }
   },
+
+  CHAT_ASSISTANT: {
+    name: "Chat Assistant",
+    description: "사용자와 자연스러운 대화를 나누는 채팅 어시스턴트입니다. 명령 수행이 아닌 대화만 진행합니다.",
+    template: (userInput: string, _examples: any[], _crawledItems: CrawledItem[], _mode: Mode) => {
+      return `<start_of_turn>user
+당신은 친근하고 도움이 되는 AI 채팅 어시스턴트입니다. 사용자와 자연스러운 대화를 나누세요.
+
+**중요 규칙:**
+1. 웹 페이지 조작이나 명령 수행을 하지 마세요
+2. JSON 형식이 아닌 자연스러운 텍스트로 답변하세요
+3. 친근하고 도움이 되는 톤으로 대화하세요
+4. 질문에 대해 정확하고 유용한 정보를 제공하세요
+
+사용자 메시지: "${userInput}"
+
+당신의 답변:
+<end_of_turn>
+<start_of_turn>model`;
+    }
+  },
 } as const;
 
 export const CURRENT_PROMPT = AI_PROMPTS.AGENT_PLANNER;

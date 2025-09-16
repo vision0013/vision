@@ -114,7 +114,7 @@ export async function handleAIMessage(
  */
 function mapBackgroundActionToOffscreen(action: string): string {
   const actionMap: Record<string, string> = {
-    'getAIPlan': 'analyzeIntent', // ✨ [신규] AI 계획 요청
+    'getAIPlan': 'analyzeIntent', // ✨ [신규] AI 계획 요청 (채팅 모드 포함)
     'downloadAIModel': 'downloadModel',
     'initializeAI': 'initializeAI',
     'loadAIModel': 'initializeAI', // Load Model도 같은 Offscreen 액션 사용

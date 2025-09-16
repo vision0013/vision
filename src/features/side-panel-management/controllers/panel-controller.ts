@@ -3,6 +3,13 @@ import { useSidePanelStore } from '../process/panel-store';
 import { useSpeechRecognition, requestHighlight } from '../../index';
 import { Mode } from '@/types';
 
+export interface ChatMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+}
+
 export const useSidePanelController = () => {
   const {
     activeTabId,
@@ -25,6 +32,10 @@ export const useSidePanelController = () => {
   const [markdownContent, setMarkdownContent] = useState('');
   const [pageTitle, setPageTitle] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
+
+  // 채팅 관련 상태
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
   const currentTabData = activeTabId ? tabDataMap[activeTabId] : null;
   const { analysisResult, filter, searchTerm, mode } = currentTabData || {
@@ -120,12 +131,59 @@ export const useSidePanelController = () => {
   }, []);
 
   const handleDownload = useCallback(() => {
-    chrome.runtime.sendMessage({ 
-      action: 'DOWNLOAD_MARKDOWN', 
-      markdown: markdownContent, 
-      title: pageTitle 
+    chrome.runtime.sendMessage({
+      action: 'DOWNLOAD_MARKDOWN',
+      markdown: markdownContent,
+      title: pageTitle
     });
   }, [markdownContent, pageTitle]);
+
+  // 채팅 메시지 전송 핸들러
+  const handleSendChatMessage = useCallback(async (messageText: string) => {
+    if (!activeTabId || !messageText.trim()) return;
+
+    // 사용자 메시지 추가
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      text: messageText.trim(),
+      isUser: true,
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, userMessage]);
+
+    setIsChatLoading(true);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'sendChatMessage',
+        message: messageText.trim(),
+        tabId: activeTabId
+      });
+
+      if (response.success && response.reply) {
+        const aiMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          text: response.reply,
+          isUser: false,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, aiMessage]);
+      } else {
+        throw new Error(response.error || 'AI 응답을 받을 수 없습니다.');
+      }
+    } catch (error) {
+      console.error('❌ [panel] Error sending chat message:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: '죄송합니다. 메시지 전송 중 오류가 발생했습니다.',
+        isUser: false,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  }, [activeTabId]);
 
   const { transcribedText, isListening, toggleListening, error } = useSpeechRecognition(handleVoiceCommand);
 
@@ -197,5 +255,9 @@ export const useSidePanelController = () => {
     isLoading,
     mode: mode || 'navigate',
     onModeChange: (newMode: Mode) => setMode(newMode, activeTabId || undefined),
+    // 채팅 관련
+    chatMessages,
+    isChatLoading,
+    onSendChatMessage: handleSendChatMessage,
   };
 };

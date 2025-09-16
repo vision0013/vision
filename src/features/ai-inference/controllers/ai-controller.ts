@@ -66,6 +66,10 @@ export class AIController {
     return this.inferenceEngine.analyzeIntent(voiceInput, crawledItems, mode);
   }
 
+  async analyzeChat(userInput: string): Promise<string> {
+    return this.inferenceEngine.analyzeChat(userInput);
+  }
+
   setPromptTemplate(promptName: keyof typeof AI_PROMPTS): void {
     this.inferenceEngine.setPromptTemplate(promptName);
   }

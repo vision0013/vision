@@ -7,6 +7,7 @@ import { PermissionsError } from '../../features';
 import { Header } from './extension-header';
 import { Stats } from './crawling-summary';
 import { ResultsList } from './crawling-results';
+import { ChatRoom } from '../../features/chat/ui/chat-room';
 
 const LoadingSpinner: React.FC = () => (
   <div className="spinner-container">
@@ -39,6 +40,10 @@ const SidePanel: React.FC = () => {
     isLoading,
     mode,
     onModeChange,
+    // 채팅 관련
+    chatMessages,
+    isChatLoading,
+    onSendChatMessage,
   } = useSidePanelController();
   
   const [activeTab, setActiveTab] = useState('crawler');
@@ -68,30 +73,48 @@ const SidePanel: React.FC = () => {
 
       {/* ✨ [신규] 모드 전환 UI */}
       <div className="mode-switcher">
-        <button 
-          onClick={() => onModeChange('navigate')} 
+        <button
+          onClick={() => onModeChange('navigate')}
           className={`mode-button ${mode === 'navigate' ? 'active' : ''}`}>
           탐색 모드
         </button>
-        <button 
-          onClick={() => onModeChange('search')} 
+        <button
+          onClick={() => onModeChange('search')}
           className={`mode-button ${mode === 'search' ? 'active' : ''}`}>
           검색 모드
+        </button>
+        <button
+          onClick={() => onModeChange('chat')}
+          className={`mode-button ${mode === 'chat' ? 'active' : ''}`}>
+          채팅 모드
         </button>
       </div>
 
       {/* ✨ [복구] 기존 탭 버튼 UI */}
-      <div className="tab-container">
-        <button onClick={() => setActiveTab('crawler')} className={`tab-button ${activeTab === 'crawler' ? 'active' : ''}`}>
-          크롤링
-        </button>
-        <button onClick={() => setActiveTab('markdown')} className={`tab-button ${activeTab === 'markdown' ? 'active' : ''}`}>
-          마크다운 저장
-        </button>
-      </div>
+      {mode !== 'chat' && (
+        <div className="tab-container">
+          <button onClick={() => setActiveTab('crawler')} className={`tab-button ${activeTab === 'crawler' ? 'active' : ''}`}>
+            크롤링
+          </button>
+          <button onClick={() => setActiveTab('markdown')} className={`tab-button ${activeTab === 'markdown' ? 'active' : ''}`}>
+            마크다운 저장
+          </button>
+        </div>
+      )}
+
+      {/* 채팅 모드 UI */}
+      {mode === 'chat' && (
+        <div className="tab-content" style={{ padding: '16px', height: '400px' }}>
+          <ChatRoom
+            messages={chatMessages}
+            onSendMessage={onSendChatMessage}
+            isLoading={isChatLoading}
+          />
+        </div>
+      )}
 
       {/* ✨ [복구] 크롤러 탭 컨텐츠 */}
-      {activeTab === 'crawler' && (
+      {mode !== 'chat' && activeTab === 'crawler' && (
         <div className="tab-content">
           <Stats analysisResult={analysisResult} />
           <FilterControls
@@ -109,17 +132,17 @@ const SidePanel: React.FC = () => {
       )}
 
       {/* ✨ [복구] 마크다운 탭 컨텐츠 */}
-      {activeTab === 'markdown' && (
+      {mode !== 'chat' && activeTab === 'markdown' && (
         <div className="tab-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <button onClick={onExtract} className="btn btn-primary" disabled={isExtracting}>
               {isExtracting ? '추출 중...' : '본문 전체 추출'}
             </button>
           </div>
-          {pageTitle && <h3 style={{fontSize: '16px'}}>{pageTitle}</h3>} 
-          <textarea 
-            readOnly 
-            value={markdownContent} 
+          {pageTitle && <h3 style={{fontSize: '16px'}}>{pageTitle}</h3>}
+          <textarea
+            readOnly
+            value={markdownContent}
             style={{width: '100%', flex: 1, resize: 'none'}}
             placeholder="여기에 추출된 마크다운 내용이 표시됩니다."
           />
