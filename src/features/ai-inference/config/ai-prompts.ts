@@ -17,30 +17,13 @@ export interface PromptTemplate {
 }
 
 /**
- * ✨ [개선] 크롤링된 데이터를 AI 프롬프트에 맞게 요약하고 축소하는 헬퍼
+ * ✨ [리팩터링] 전달받은 아이템 목록을 AI 프롬프트 형식으로 변환만 수행
  */
 function formatCrawledItemsForPrompt(items: CrawledItem[]): string {
-  const MAX_ITEMS_TO_SEND = 40;    // 전송 개수 대폭 감소
-  const MAX_TEXT_LENGTH = 50;      // 텍스트 길이 추가 제한
+  const MAX_TEXT_LENGTH = 50; // 텍스트 길이는 계속 제한
 
-  // 1. 상호작용 가능한 중요 요소 (input, button 등)를 우선적으로 필터링
-  const priorityItems = items.filter(item => 
-    !item.hidden && (item.type === 'button' || item.type === 'input' || item.type === 'textarea')
-  );
-
-  // 2. 그 외 클릭 가능한 링크나 텍스트 요소 필터링
-  const otherItems = items.filter(item => 
-    !item.hidden && 
-    !(item.type === 'button' || item.type === 'input' || item.type === 'textarea') && 
-    (item.isClickable || (item.text && item.text.length > 0))
-  );
-
-  // 3. 중요 요소 먼저, 그 다음 다른 요소 순으로 합치고 최대 개수 제한
-  const combinedItems = [...priorityItems, ...otherItems].slice(0, MAX_ITEMS_TO_SEND);
-
-  return combinedItems
+  return items
     .map(item => {
-      // ✨ [개선] 데이터 형식을 압축하여 토큰 사용량 최소화
       const parts: string[] = [];
       parts.push(`id:${item.id}`);
       parts.push(`t:${item.type}`);
@@ -50,7 +33,7 @@ function formatCrawledItemsForPrompt(items: CrawledItem[]): string {
       if (item.isInputtable) parts.push(`inpt:t`);
       return `{${parts.join(',')}}`;
     })
-    .join(' '); // 줄바꿈 대신 공백으로 구분하여 토큰 추가 절약
+    .join(' ');
 }
 
 export const AI_PROMPTS = {

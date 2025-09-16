@@ -1,31 +1,40 @@
 import { handleAIMessage } from './ai-message-handler';
 import { tabStateManager } from '../controllers/managers/tab-state-manager';
-import { BoundingBox } from '../../types';
+import { CrawledItem, BoundingBox } from '../../types';
 
-/**
- * ✨ [수정] 요소의 좌표가 화면(viewport) 내에 있는지 확인하는 헬퍼 함수
- */
 function isRectInViewport(rect: BoundingBox, viewport: { width: number; height: number }): boolean {
-  // bottom과 right를 직접 계산
   const bottom = rect.top + rect.height;
   const right = rect.left + rect.width;
-
-  return (
-    rect.top >= 0 &&
-    rect.left >= 0 &&
-    bottom <= viewport.height &&
-    right <= viewport.width &&
-    rect.width > 0 &&
-    rect.height > 0
-  );
+  return rect.top >= 0 && rect.left >= 0 && bottom <= viewport.height && right <= viewport.width && rect.width > 0 && rect.height > 0;
 }
 
-/**
- * UI (패널)로부터 받은 음성 명령을 받아 전체 AI 처리 흐름을 지휘합니다.
- */
+function getSmartRankedItems(items: CrawledItem[], command: string): CrawledItem[] {
+  const keywords = command.split(/\s+/).filter(k => k.length > 1);
+  if (keywords.length === 0) return items;
+
+  const scoredItems = items.map(item => {
+    let score = 0;
+    const itemText = `${item.text || ''} ${item.label || ''} ${item.placeholder || ''}`.toLowerCase();
+    const itemType = item.type.toLowerCase();
+
+    for (const keyword of keywords) {
+      const lowerKeyword = keyword.toLowerCase();
+      if (itemText.includes(lowerKeyword)) score += 5;
+      if (itemType.includes(lowerKeyword)) score += 10;
+    }
+    return { item, score };
+  });
+
+  return scoredItems
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.item);
+}
+
 export async function handleCommandFromUI(request: any, sender: chrome.runtime.MessageSender) {
   const { command } = request;
   const tabId = sender.tab?.id || request.tabId;
+  const MAX_ITEMS_TO_SEND = 40; // AI에게 보낼 최대 아이템 개수
 
   if (!tabId) {
     console.error('❌ [Orchestrator] No tab ID found for the command.');
@@ -44,17 +53,20 @@ export async function handleCommandFromUI(request: any, sender: chrome.runtime.M
     }
 
     const visibleItems = crawledData.filter(item => isRectInViewport(item.rect, viewport));
-    console.log(`[Orchestrator] Filtered to ${visibleItems.length} visible items (out of ${crawledData.length})`);
+    const rankedItems = getSmartRankedItems(visibleItems, command);
+    
+    // ✨ [수정] 관련도 순 + 전체 순, 중복 제거 후 최종 개수 제한
+    const finalItemsForAI = [...new Set([...rankedItems, ...visibleItems])].slice(0, MAX_ITEMS_TO_SEND);
+
+    console.log(`[Orchestrator] Filtered to ${finalItemsForAI.length} items for AI (out of ${crawledData.length} total)`);
 
     const response = await handleAIMessage({
       action: 'getAIPlan',
       command: command,
-      crawledItems: visibleItems
+      crawledItems: finalItemsForAI
     });
 
-    if (response.error) {
-      throw new Error(response.error);
-    }
+    if (response.error) throw new Error(response.error);
 
     const aiResult = response.result;
     console.log('🧠 [Orchestrator] AI analysis result:', aiResult);
