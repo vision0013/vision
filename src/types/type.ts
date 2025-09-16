@@ -1,4 +1,4 @@
-export type Mode = 'navigate' | 'search';
+export type Mode = 'navigate' | 'search' | 'chat';
 
 export interface BoundingBox {
   top: number;

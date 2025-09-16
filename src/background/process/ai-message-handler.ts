@@ -93,9 +93,9 @@ export async function handleAIMessage(
       };
       chrome.runtime.onMessage.addListener(listener);
       
-      // 다운로드는 12분, AI 추론은 60초, 기타는 30초 타임아웃
+      // 다운로드는 12분, AI 추론은 30초, 기타는 20초 타임아웃
       const timeoutDuration = request.action === 'downloadAIModel' ? 12 * 60 * 1000 :
-                             request.action === 'getAIPlan' ? 60000 : 30000;
+                             request.action === 'getAIPlan' ? 30000 : 20000;
       timeoutId = setTimeout(() => {
         chrome.runtime.onMessage.removeListener(listener);
         resolve({ error: 'AI operation timeout' });
@@ -114,7 +114,7 @@ export async function handleAIMessage(
  */
 function mapBackgroundActionToOffscreen(action: string): string {
   const actionMap: Record<string, string> = {
-    'getAIPlan': 'analyzeIntent', // ✨ [신규] AI 계획 요청
+    'getAIPlan': 'analyzeIntent', // ✨ [신규] AI 계획 요청 (채팅 모드 포함)
     'downloadAIModel': 'downloadModel',
     'initializeAI': 'initializeAI',
     'loadAIModel': 'initializeAI', // Load Model도 같은 Offscreen 액션 사용
@@ -243,10 +243,18 @@ export async function handleSwitchModel(modelId: string, token?: string): Promis
         chrome.runtime.sendMessage({
           action: 'modelStatusResponse',
           status: {
-            state: 1, // 모델 선택됨, 로드 필요
+            state: 4, // 모델 선택됨, 로드 필요 (UI에서 "로드" 버튼을 표시하도록 4로 변경)
             error: undefined,
             currentModelId: modelId
           }
+        }).catch(() => {
+          // 메시지 전송 실패는 조용히 무시
+        });
+
+        // 🔧 [신규] Offscreen에도 모델 전환 알림
+        chrome.runtime.sendMessage({
+          action: 'modelSwitched',
+          modelId: modelId
         }).catch(() => {
           // 메시지 전송 실패는 조용히 무시
         });

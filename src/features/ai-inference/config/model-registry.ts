@@ -13,7 +13,7 @@ export const AVAILABLE_MODELS: AvailableModels = {
     quantization: 'int4',
     category: 'medium',
     defaultConfig: {
-      maxTokens: 2048,
+      maxTokens: 8192,
       temperature: 0.05,
       topK: 40,
       randomSeed: 42
@@ -24,26 +24,8 @@ export const AVAILABLE_MODELS: AvailableModels = {
     }
   },
 
-  'phi-4-mini': {
-    id: 'phi-4-mini',
-    name: 'Phi-4 Mini Instruct',
-    description: '소형 고효율 모델 (인증 불필요)',
-    modelPath: 'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/main/phi4_q8_ekv1280.task',
-    size: '3.9GB',
-    requiresToken: false,
-    quantization: 'int8',
-    category: 'medium',
-    defaultConfig: {
-      maxTokens: 1280,
-      temperature: 0.1,
-      topK: 50,
-      randomSeed: 42
-    },
-    performance: {
-      avgResponseTime: 280,
-      memoryUsage: '3.9GB'
-    }
-  },
+  // Phi-4 Mini는 MediaPipe 호환성 이슈로 제거됨 (ArrayBuffer allocation failed)
+  // 'phi-4-mini': { ... }
 
   'gemma3-12b-it': {
     id: 'gemma3-12b-it',
@@ -55,7 +37,7 @@ export const AVAILABLE_MODELS: AvailableModels = {
     quantization: 'int4',
     category: 'large',
     defaultConfig: {
-      maxTokens: 4096,
+      maxTokens: 8192,
       temperature: 0.05,
       topK: 40,
       randomSeed: 42
@@ -76,17 +58,12 @@ export function getRecommendedModel(requirements: {
   maxSize?: string;
   performance?: 'fast' | 'balanced' | 'accurate';
 }): string {
-  const { preferNoAuth = false, performance = 'balanced' } = requirements;
+  const { performance = 'balanced' } = requirements;
 
-  // 인증 불필요 모델 선호
-  if (preferNoAuth) {
-    return 'phi-4-mini'; // 인증 불필요 모델 중 최고 성능
-  }
-
-  // 성능 기반 추천
-  if (performance === 'fast') return 'phi-4-mini';
-  if (performance === 'accurate') return 'gemma3-4b-it';
-  return 'phi-4-mini'; // balanced - 인증 불필요하면서 성능 좋음
+  // 현재 안정적으로 지원되는 모델만 사용
+  if (performance === 'fast') return 'gemma3-4b-it';
+  if (performance === 'accurate') return 'gemma3-12b-it';
+  return 'gemma3-4b-it'; // balanced - 기본 권장 모델
 }
 
 // 모델 카테고리별 필터링
@@ -94,7 +71,7 @@ export function getModelsByCategory(category: 'small' | 'medium' | 'large'): Mod
   return Object.values(AVAILABLE_MODELS).filter(model => model.category === category);
 }
 
-// 인증 불필요 모델들만 반환
+// 인증 불필요 모델들만 반환 (현재는 모든 안정 모델이 토큰 필요)
 export function getModelsWithoutAuth(): ModelInfo[] {
   return Object.values(AVAILABLE_MODELS).filter(model => !model.requiresToken);
 }

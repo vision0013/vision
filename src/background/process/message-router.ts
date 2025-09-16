@@ -62,6 +62,9 @@ export class MessageRouter {
     // 음성 명령 (신규 아키텍처)
     this.handlers.set('executeVoiceCommand', handleCommandFromUI);
 
+    // 채팅 메시지
+    this.handlers.set('sendChatMessage', this.handleChatMessage.bind(this));
+
     // 하이라이트 관련
     this.handlers.set('highlightElement', handleHighlightMessage);
     this.handlers.set('setActiveElement', handleHighlightMessage);
@@ -125,6 +128,49 @@ export class MessageRouter {
   }
 
   // 탭 ID 핸들러 제거 - Background가 이미 탭별로 관리함
+
+  /**
+   * 채팅 메시지 처리 - 기존 AI 시스템 활용
+   */
+  private async handleChatMessage(
+    request: BackgroundMessage,
+    _sender: chrome.runtime.MessageSender
+  ): Promise<any> {
+    try {
+      console.log('💬 [router] Processing chat message:', request.message);
+
+      // 기존 AI 시스템 사용, 단지 mode를 'chat'으로 설정
+      const response = await handleAIMessage({
+        action: 'getAIPlan',
+        command: request.message,
+        crawledItems: [], // 채팅에서는 빈 배열
+        mode: 'chat'
+      });
+
+      if (response.error) {
+        console.error('❌ [router] Chat message handling failed:', response.error);
+        return {
+          success: false,
+          error: response.error
+        };
+      }
+
+      // 채팅 모드에서는 rawResponse를 사용
+      const reply = response.result?.rawResponse || response.result?.reasoning || '응답을 생성할 수 없습니다.';
+      console.log('✅ [router] Chat response generated:', reply);
+
+      return {
+        success: true,
+        reply: reply
+      };
+    } catch (error: any) {
+      console.error('❌ [router] Chat message handling failed:', error);
+      return {
+        success: false,
+        error: error.message || '채팅 처리 중 오류가 발생했습니다.'
+      };
+    }
+  }
 
   /**
    * 등록된 액션 목록 조회 (디버깅용)

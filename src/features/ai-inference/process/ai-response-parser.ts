@@ -5,11 +5,38 @@ import { AIAnalysisResult } from '../types/ai-types';
  */
 export class AIResponseParser {
   /**
+   * 채팅 모드용 AI 응답 파싱 (텍스트 그대로 반환)
+   */
+  static parseChatResponse(response: string): string {
+    try {
+      console.log('💬 [ai-response-parser] Chat response:', response);
+
+      // 채팅 모드에서는 텍스트 그대로 반환
+      const cleanResponse = response.trim();
+      return cleanResponse || '죄송합니다. 응답을 생성할 수 없습니다.';
+    } catch (error: any) {
+      console.error('❌ [ai-parser] Failed to process chat response:', error);
+      return '죄송합니다. 응답 처리 중 오류가 발생했습니다.';
+    }
+  }
+
+  /**
    * AI 응답을 파싱하여 AIAnalysisResult로 변환
    */
-  static parseAIResponse(response: string, _originalCommand: string): AIAnalysisResult {
+  static parseAIResponse(response: string, _originalCommand: string, mode?: string): AIAnalysisResult {
     try {
       console.log('🔍 [ai-response-parser] Raw AI response:', response);
+      console.log('🔍 [ai-response-parser] Mode:', mode);
+
+      // 채팅 모드에서는 텍스트 그대로 반환
+      if (mode === 'chat') {
+        const cleanResponse = response.trim();
+        return {
+          plan: [],
+          reasoning: cleanResponse,
+          rawResponse: cleanResponse
+        };
+      }
 
       const firstBrace = response.indexOf('{');
       const lastBrace = response.lastIndexOf('}');

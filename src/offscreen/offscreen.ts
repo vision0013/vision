@@ -144,6 +144,20 @@ async function initializeOffscreen() {
           })();
           break;
 
+        case 'modelSwitched':
+          // 🔧 [신규] 모델 전환 알림 처리
+          (async () => {
+            const newModelId = message.modelId;
+            console.log(`🎯 [offscreen] Received model switch notification: ${newModelId}`);
+
+            // Offscreen에서도 활성 모델 업데이트 및 새 컨트롤러 생성
+            const { setCurrentActiveModel, getAIController } = await import('../features/ai-inference/controllers/ai-controller');
+            setCurrentActiveModel(newModelId);
+            aiController = getAIController(newModelId); // 새 모델로 컨트롤러 교체
+            console.log(`✅ [offscreen] Active model updated to: ${newModelId}`);
+          })();
+          break;
+
       }
     });
 

@@ -15,6 +15,7 @@ export class ModelManager {
   private currentModelId: string = DEFAULT_MODEL_ID;
   private downloadProgress: ModelDownloadProgress | null = null;
   private downloadAbortController: AbortController | null = null;
+  private static genaiFileset: any = null; // 🔧 [신규] Fileset을 재사용
 
   constructor(private config: AIModelConfig, modelId?: string) {
     this.currentModelId = modelId || DEFAULT_MODEL_ID;
@@ -33,6 +34,32 @@ export class ModelManager {
     return this.status.state === 3 && this.llm !== null;
   }
 
+  private async checkWebGPUSupport(): Promise<void> {
+    try {
+      if (!('gpu' in navigator)) {
+        console.warn('⚠️ [model-manager] WebGPU not supported in this browser');
+        return;
+      }
+
+      const adapter = await (navigator as any).gpu.requestAdapter();
+      if (!adapter) {
+        console.warn('⚠️ [model-manager] No WebGPU adapter found');
+        return;
+      }
+
+      const device = await adapter.requestDevice();
+      console.log('🚀 [model-manager] WebGPU is supported and available');
+      console.log('🔧 [model-manager] GPU Adapter:', adapter);
+      console.log('🔧 [model-manager] GPU Device:', device);
+
+      // MediaPipe는 자동으로 WebGPU를 사용하므로 여기서는 확인만 함
+      console.log('✅ [model-manager] MediaPipe will use GPU acceleration if model supports it');
+
+    } catch (error) {
+      console.warn('⚠️ [model-manager] WebGPU initialization failed:', error);
+    }
+  }
+
   async initialize(): Promise<boolean> {
     if (this.status.state === 3) return true;
     if (this.status.state === 2) return false;
@@ -41,6 +68,9 @@ export class ModelManager {
       this.status = { ...this.status, state: 2 };
       const startTime = Date.now();
 
+      // WebGPU 지원 확인
+      await this.checkWebGPUSupport();
+
       const modelExists = await OPFSFileManager.checkModelExists(this.currentModelId);
       if (!modelExists) {
         this.status = { state: 1, currentModelId: this.currentModelId, error: 'Model not found in OPFS.' };
@@ -48,10 +78,17 @@ export class ModelManager {
       }
 
       const modelFilePath = await OPFSFileManager.getModelFileURL(this.currentModelId);
-      const wasmPath = chrome.runtime.getURL("wasm_files/");
-      const genaiFileset = await FilesetResolver.forGenAiTasks(wasmPath);
 
-      this.llm = await LlmInference.createFromOptions(genaiFileset, {
+      // 🔧 [수정] Fileset을 재사용해서 WebGPU 리소스 중첩 방지
+      if (!ModelManager.genaiFileset) {
+        const wasmPath = chrome.runtime.getURL("wasm_files/");
+        ModelManager.genaiFileset = await FilesetResolver.forGenAiTasks(wasmPath);
+        console.log('🔧 [model-manager] Created new FilesetResolver');
+      } else {
+        console.log('♻️ [model-manager] Reusing existing FilesetResolver');
+      }
+
+      this.llm = await LlmInference.createFromOptions(ModelManager.genaiFileset, {
         baseOptions: { modelAssetPath: modelFilePath },
         maxTokens: this.config.maxTokens!,
         temperature: this.config.temperature!,
@@ -61,7 +98,18 @@ export class ModelManager {
 
       const loadTime = Date.now() - startTime;
       this.status = { state: 3, loadTime, currentModelId: this.currentModelId };
+
+      // 현재 모델 정보 출력
+      const modelInfo = AVAILABLE_MODELS[this.currentModelId];
       console.log(`✅ [model-manager] Model loaded in ${loadTime}ms`);
+      console.log(`🤖 [model-manager] Active Model: ${modelInfo?.name || this.currentModelId}`);
+      console.log(`📋 [model-manager] Model ID: ${this.currentModelId}`);
+      console.log(`📊 [model-manager] Model Size: ${modelInfo?.size || 'Unknown'}`);
+      console.log(`🔧 [model-manager] Model Config:`, {
+        maxTokens: this.config.maxTokens,
+        temperature: this.config.temperature,
+        topK: this.config.topK
+      });
       return true;
 
     } catch (error: any) {
@@ -152,12 +200,31 @@ export class ModelManager {
   }
 
   async switchModel(modelId: string): Promise<void> {
+    // 🔧 [수정] 이전 모델 완전 정리
     if (this.llm) {
+      console.log('🧹 [model-manager] Closing previous model instance');
+      try {
+        this.llm.close();
+      } catch (error) {
+        console.warn('⚠️ [model-manager] Error closing previous model:', error);
+      }
       this.llm = null;
     }
+
+    // 🔧 [신규] 가비지 컬렉션 강제 실행 (브라우저가 허용할 때만)
+    if (typeof window !== 'undefined' && (window as any).gc) {
+      try {
+        (window as any).gc();
+        console.log('🗑️ [model-manager] Forced garbage collection');
+      } catch (error) {
+        // gc() 사용 불가능한 환경에서는 조용히 무시
+      }
+    }
+
     this.currentModelId = modelId;
     this.config = AVAILABLE_MODELS[modelId].defaultConfig;
     this.status = { state: 1, currentModelId: modelId };
+    console.log(`🔄 [model-manager] Switched to model: ${modelId}`);
   }
 
   async getAllModelsStatus(): Promise<Record<string, { exists: boolean; size?: number }>> {

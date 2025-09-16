@@ -79,7 +79,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         if (message.action === 'modelSwitched') {
           console.log(`🔄 [ai-settings] Model switched notification: ${message.modelId}`);
           setCurrentModelId(message.modelId);
-          loadModelData(); // 상태 새로고침
+          // 상태 새로고침은 modelStatusResponse 메시지가 전담하므로 여기서는 호출하지 않음
         }
       };
 
@@ -98,42 +98,13 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
       clearAiError();
       setAiModelStatus({ state: 2, error: undefined }); // 2: 로딩중
 
-      const response = await chrome.runtime.sendMessage({
+      // 백그라운드에 전환 요청만 보내고, 모든 상태 업데이트는 메시지 리스너가 처리
+      await chrome.runtime.sendMessage({
         action: 'switchAIModel',
         modelId,
         token
       });
 
-      if (response.success) {
-        // 즉시 UI 업데이트
-        setCurrentModelId(modelId);
-        console.log(`✅ [ai-settings] Model switched to: ${availableModels[modelId]?.name}`);
-
-        // 모델 전환 완료 - 로드 필요 상태로 변경
-        setAiModelStatus({
-          state: 1, // 1: 모델 선택됨, 로드 필요
-          error: undefined
-        });
-
-        // 상태 데이터 새로고침
-        setTimeout(() => {
-          loadModelData();
-        }, 500);
-
-        // 성공 메시지 표시
-        alert(`✅ 모델이 전환되었습니다!
-
-새 모델: ${availableModels[modelId]?.name}
-
-이제 "모델 로드" 버튼을 눌러 실제 로딩을 시작하세요.`);
-      } else {
-        // 실패 시 상태를 에러로 변경
-        setAiModelStatus({
-          state: 4, // 4: 에러
-          error: response.error || '모델 전환에 실패했습니다'
-        });
-        throw new Error(response.error || '모델 전환에 실패했습니다');
-      }
     } catch (error: any) {
       console.error('❌ [ai-settings] Model switch failed:', error);
       setAiModelStatus({

@@ -39,6 +39,32 @@ export class InferenceEngine {
     });
   }
 
+  async analyzeChat(userInput: string): Promise<string> {
+    if (!this.aiController.isReadyForInference()) {
+      throw new Error('AI model is not ready for inference');
+    }
+
+    try {
+      const originalPrompt = this.currentPromptName;
+      this.setPromptTemplate('CHAT_ASSISTANT');
+
+      const prompt = await this.buildChatPrompt(userInput);
+      const response = await this.llm!.generateResponse(prompt);
+      const result = AIResponseParser.parseChatResponse(response);
+
+      this.setPromptTemplate(originalPrompt);
+      return result;
+    } catch (error: any) {
+      console.error('❌ [inference-engine] Chat analysis failed:', error);
+      throw error;
+    }
+  }
+
+  private async buildChatPrompt(userInput: string): Promise<string> {
+    const promptTemplate = getPromptTemplate('CHAT_ASSISTANT');
+    return promptTemplate.template(userInput, [], [], 'chat');
+  }
+
   private async processAnalysisQueue(): Promise<void> {
     if (!this.aiController.isReadyForInference() || this.isAnalyzing || this.analysisQueue.length === 0) {
       return;
@@ -51,8 +77,18 @@ export class InferenceEngine {
     try {
       // ✨ [수정] buildAnalysisPrompt에 mode 전달
       const prompt = await this.buildAnalysisPrompt(voiceInput, crawledItems, mode);
+
+      // 성능 측정 시작
+      const inferenceStartTime = performance.now();
       const response = await this.llm!.generateResponse(prompt);
-      const result = AIResponseParser.parseAIResponse(response, voiceInput);
+      const inferenceEndTime = performance.now();
+      const inferenceTime = inferenceEndTime - inferenceStartTime;
+
+      console.log(`🚀 [inference-engine] AI inference took ${inferenceTime.toFixed(2)}ms`);
+      console.log(`📊 [inference-engine] Mode: ${mode}, Input length: ${voiceInput.length}`);
+      console.log(`🤖 [inference-engine] Current Model: ${this.aiController.getCurrentModelId()}`);
+
+      const result = AIResponseParser.parseAIResponse(response, voiceInput, mode);
       resolve(result);
     } catch (error: any) {
       console.error('❌ [inference-engine] AI analysis failed:', error);
@@ -65,7 +101,9 @@ export class InferenceEngine {
 
   // ✨ [수정] buildAnalysisPrompt 시그니처 변경
   private async buildAnalysisPrompt(voiceInput: string, crawledItems: CrawledItem[], mode: Mode): Promise<string> {
-    const promptTemplate = getPromptTemplate(this.currentPromptName);
+    // 채팅 모드일 때는 CHAT_ASSISTANT 프롬프트 사용
+    const promptName = mode === 'chat' ? 'CHAT_ASSISTANT' : this.currentPromptName;
+    const promptTemplate = getPromptTemplate(promptName);
     const baseExamples = getBaseExamples();
     // ✨ [수정] template 함수에 mode 전달
     return promptTemplate.template(voiceInput, baseExamples, crawledItems, mode);
