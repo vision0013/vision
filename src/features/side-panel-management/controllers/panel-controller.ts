@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useSidePanelStore } from '../process/panel-store';
-import { useSpeechRecognition, requestHighlight } from '../../index'; // features 내부 참조
+import { useSpeechRecognition, requestHighlight } from '../../index';
+import { Mode } from '@/types';
 
 export const useSidePanelController = () => {
   const {
@@ -13,144 +14,90 @@ export const useSidePanelController = () => {
     setFilter,
     setSearchTerm,
     setAiModelStatus,
+    // ✨ [복구 및 추가]
+    isLoading,
+    setIsLoading,
+    setMode,
   } = useSidePanelStore();
 
-  // ✨ [신규] 현재 활성화된 요소 상태 관리
   const [activeElementId, setActiveElementId] = useState<number | null>(null);
-
-  // 마크다운 관련 상태
   const [markdownContent, setMarkdownContent] = useState('');
   const [pageTitle, setPageTitle] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
 
-  // 현재 탭의 데이터를 직접 구독하여 탭 변경시 자동 업데이트
-  const currentTabData = activeTabId && tabDataMap[activeTabId] 
-    ? tabDataMap[activeTabId] 
-    : { analysisResult: null, filter: 'all', searchTerm: '' };
-  
-  const { analysisResult, filter, searchTerm } = currentTabData;
+  const currentTabData = activeTabId ? tabDataMap[activeTabId] : null;
+  const { analysisResult, filter, searchTerm, mode } = currentTabData || {
+    analysisResult: null, filter: 'all', searchTerm: '', mode: 'navigate'
+  };
 
-  const analysisResultRef = useRef(analysisResult);
   const activeTabIdRef = useRef(activeTabId);
-
-  useEffect(() => {
-    analysisResultRef.current = analysisResult;
-  }, [analysisResult]);
-
-  useEffect(() => {
-    activeTabIdRef.current = activeTabId;
-  }, [activeTabId]);
+  useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
 
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) setActiveTabId(tabs[0].id);
     });
 
-    // 탭 변경 감지
-    const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => {
-      setActiveTabId(activeInfo.tabId);
-    };
-
+    const handleTabActivated = (activeInfo: chrome.tabs.TabActiveInfo) => setActiveTabId(activeInfo.tabId);
     const handleTabUpdated = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      if (changeInfo.status === 'complete' && tab.active) {
-        setActiveTabId(tabId);
-      }
+      if (changeInfo.status === 'complete' && tab.active) setActiveTabId(tabId);
     };
 
     chrome.tabs.onActivated.addListener(handleTabActivated);
     chrome.tabs.onUpdated.addListener(handleTabUpdated);
-    
+
     const messageListener = (request: any) => {
-      // 🔒 탭 ID 검증: 현재 활성 탭의 데이터만 처리
-      const requestTabId = request.tabId;
-      const currentActiveTabId = activeTabIdRef.current;
-      
-      // 기존 전체 업데이트 로직
-      if (request.action === 'updatePanelData') {
-        console.log('📨 [SIDE-PANEL] Received updatePanelData with', request.data.items.length, 'items for tab:', requestTabId);
-        console.log('📨 [SIDE-PANEL] Current active tab ID:', currentActiveTabId);
-        
-        // 탭 ID 검증: 현재 활성 탭의 데이터만 처리
-        if (requestTabId && requestTabId === currentActiveTabId) {
-          setAnalysisResult(request.data, currentActiveTabId || undefined);
-          console.log('✅ [SIDE-PANEL] Analysis result updated for active tab');
-        } else {
-          console.log('🚫 [SIDE-PANEL] Ignored updatePanelData - not from active tab:', requestTabId, 'vs', currentActiveTabId);
-        }
-      } 
-      
-      // 새로운 아이템 추가 로직
-      else if (request.action === 'addNewItems') {
-        console.log('🔄 Side Panel: Received', request.data.length, 'new items for tab:', requestTabId);
-        
-        // 탭 ID 검증: 현재 활성 탭의 데이터만 처리
-        if (requestTabId && requestTabId === currentActiveTabId) {
-          addAnalysisItems(request.data, currentActiveTabId || undefined);
-          console.log('✅ [SIDE-PANEL] New items added for active tab');
-        } else {
-          console.log('🚫 [SIDE-PANEL] Ignored addNewItems - not from active tab:', requestTabId, 'vs', currentActiveTabId);
-        }
-      }
-      
-      // ✨ [신규] 중앙 상태 관리에서 활성 요소 변경 알림 수신
-      else if (request.action === 'activeElementChanged') {
-        console.log('🎯 [panel] Active element changed:', request.ownerId, 'for tab:', request.tabId);
-        // 현재 활성 탭의 상태 변경만 처리
-        if (request.tabId === activeTabIdRef.current) {
-          setActiveElementId(request.ownerId);
-        }
-      }
-      // Markdown 결과 수신
-      else if (request.action === 'MARKDOWN_RESULT') {
-        console.log('📝 [panel-controller] Received markdown result');
+      if (request.action === 'updatePanelData' && request.tabId === activeTabIdRef.current) {
+        setAnalysisResult(request.data, request.tabId);
+      } else if (request.action === 'addNewItems' && request.tabId === activeTabIdRef.current) {
+        addAnalysisItems(request.data, request.tabId);
+      } else if (request.action === 'activeElementChanged' && request.tabId === activeTabIdRef.current) {
+        setActiveElementId(request.ownerId);
+      } else if (request.action === 'MARKDOWN_RESULT') {
         setMarkdownContent(request.markdown);
         setPageTitle(request.title);
         setIsExtracting(false);
-      }
-      // ✨ 2. AI 모델 상태 변경 메시지를 처리하는 로직을 추가합니다.
-      else if (request.action === 'aiModelStatusChanged') {
-        console.log('🔔 [panel-controller] Received AI model status update:', request.status);
+      } else if (request.action === 'aiModelStatusChanged') {
         setAiModelStatus(request.status);
+      } else if (request.action === 'modeChanged' && request.tabId === activeTabIdRef.current) {
+        setMode(request.mode, request.tabId);
       }
-
     };
-    
-    chrome.runtime.onMessage.addListener(messageListener);
 
+    chrome.runtime.onMessage.addListener(messageListener);
     return () => {
       chrome.tabs.onActivated.removeListener(handleTabActivated);
       chrome.tabs.onUpdated.removeListener(handleTabUpdated);
       chrome.runtime.onMessage.removeListener(messageListener);
     };
-  }, [setActiveTabId, setAnalysisResult, addAnalysisItems, setAiModelStatus, setMarkdownContent, setPageTitle, setIsExtracting]); // Added markdown related setters to dependencies
+  }, [setActiveTabId, setAnalysisResult, addAnalysisItems, setAiModelStatus, setMode, setMarkdownContent, setPageTitle, setIsExtracting]);
 
   const handleItemClick = (ownerId: number) => {
-    if (activeTabId) {
-      requestHighlight(activeTabId, ownerId);
-    }
+    if (activeTabId) requestHighlight(activeTabId, ownerId);
   };
 
   const handleVoiceCommand = useCallback(async (command: string) => {
     const currentTabId = activeTabIdRef.current;
-    
-    console.log('🎤 [panel] Voice command received, sending to background:', command);
-    
-    if (!currentTabId) {
-      console.warn('❌ No tab ID available for voice command');
-      return;
+    if (!currentTabId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'executeVoiceCommand',
+        command: command,
+        tabId: currentTabId
+      });
+      console.log('✅ [panel] Received response from background:', response);
+    } catch (error) {
+      console.error('❌ [panel] Error sending voice command:', error);
+    } finally {
+      setIsLoading(false);
     }
-    
-    // AI가 모든 분석을 처리하므로, 전처리나 oktjs 분석 없이 바로 백그라운드로 전송
-    chrome.runtime.sendMessage({
-      action: 'executeVoiceCommand',
-      command: command,
-      tabId: currentTabId
-    });
-  }, []);
+  }, [setIsLoading]);
 
   const handleExtract = useCallback(() => {
     setIsExtracting(true);
-    setMarkdownContent('본문 추출 중...'); // Provide immediate feedback
+    setMarkdownContent('추출 중...');
     chrome.runtime.sendMessage({ action: 'GET_PAGE_CONTENT' });
   }, []);
 
@@ -178,7 +125,7 @@ export const useSidePanelController = () => {
   return {
     analysisResult,
     filter,
-    onFilterChange: (filter: string) => setFilter(filter, activeTabId || undefined),
+    onFilterChange: (newFilter: string) => setFilter(newFilter, activeTabId || undefined),
     searchTerm,
     onSearchTermChange: (term: string) => setSearchTerm(term, activeTabId || undefined),
     filteredItems: getFilteredItems(activeTabId || undefined),
@@ -188,13 +135,15 @@ export const useSidePanelController = () => {
     onToggleListening: toggleListening,
     onExportData: exportData,
     recognitionError: error,
-    // ✨ [신규] 현재 활성화된 요소 ID
     activeElementId,
-    // Markdown related
     markdownContent,
     pageTitle,
     isExtracting,
     onExtract: handleExtract,
     onDownload: handleDownload,
+    // ✨ [복구 및 추가]
+    isLoading,
+    mode: mode || 'navigate',
+    onModeChange: (newMode: Mode) => setMode(newMode, activeTabId || undefined),
   };
 };

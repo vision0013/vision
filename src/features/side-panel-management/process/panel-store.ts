@@ -1,54 +1,65 @@
 import { create } from 'zustand';
-import { SidePanelState } from '../types/panel-types';
+import { SidePanelState, TabData } from '../types/panel-types';
 import { AIModelStatus } from '../../ai-inference/types/ai-types';
+import { Mode } from '@/types';
 
-/**
- * 안전하게 에러 메시지를 추출하는 타입 가드
- */
 const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === 'string') {
-    return error;
-  }
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    const msg = (error as any).message;
-    return typeof msg === 'string' ? msg : 'Unknown error';
-  }
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
   return 'An unexpected error occurred';
+};
+
+// Helper to get or create a tab's data with defaults
+const getOrCreateTabData = (tabDataMap: Record<number, TabData>, tabId: number): TabData => {
+  return tabDataMap[tabId] || {
+    analysisResult: null,
+    filter: 'all',
+    searchTerm: '',
+    mode: 'navigate', // ✨ [신규] 기본 모드 설정
+  };
 };
 
 export const useSidePanelStore = create<SidePanelState>((set, get) => ({
   tabDataMap: {},
   activeTabId: null,
-  // ✨ AI 모델 상태를 초기화합니다.
-  aiModelStatus: { state: 1 }, // 1: 캐시없음/로딩안됨
+  aiModelStatus: { state: 1 },
+  isLoading: false, // ✨ [신규] 로딩 상태 초기화
 
-  // ✨ AI 모델 상태를 업데이트하는 함수를 구현합니다.
-  setAiModelStatus: (status: AIModelStatus) => {
-    set({ aiModelStatus: status });
+  // ✨ [신규] 로딩 상태 설정 함수
+  setIsLoading: (loading: boolean) => set({ isLoading: loading }),
+
+  // ✨ [신규] 모드 변경 함수
+  setMode: (mode: Mode, tabId) => {
+    const currentTabId = tabId || get().activeTabId;
+    if (!currentTabId) return;
+
+    set((state) => ({
+      tabDataMap: {
+        ...state.tabDataMap,
+        [currentTabId]: {
+          ...getOrCreateTabData(state.tabDataMap, currentTabId),
+          mode: mode,
+        },
+      },
+    }));
   },
 
-  // ✨ 안전한 에러 처리 액션
+  setAiModelStatus: (status: AIModelStatus) => set({ aiModelStatus: status }),
+
   setAiError: (error: unknown) => {
     const errorMessage = getErrorMessage(error);
     set(state => ({ 
       aiModelStatus: { 
         ...state.aiModelStatus, 
         error: errorMessage,
-        state: state.aiModelStatus.state === 2 ? 1 : state.aiModelStatus.state // 로딩 중이었다면 캐시없음으로
+        state: state.aiModelStatus.state === 2 ? 1 : state.aiModelStatus.state
       } 
     }));
   },
 
-  // ✨ 에러 클리어 액션
   clearAiError: () => {
     set(state => ({ 
-      aiModelStatus: { 
-        ...state.aiModelStatus, 
-        error: undefined 
-      } 
+      aiModelStatus: { ...state.aiModelStatus, error: undefined } 
     }));
   },
 
@@ -60,10 +71,8 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
       tabDataMap: {
         ...state.tabDataMap,
         [currentTabId]: {
-          ...state.tabDataMap[currentTabId],
+          ...getOrCreateTabData(state.tabDataMap, currentTabId),
           analysisResult: result,
-          filter: state.tabDataMap[currentTabId]?.filter || 'all',
-          searchTerm: state.tabDataMap[currentTabId]?.searchTerm || '',
         },
       },
     }));
@@ -74,7 +83,7 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
     if (!currentTabId || newItems.length === 0) return;
 
     set((state) => {
-      const currentTabData = state.tabDataMap[currentTabId];
+      const currentTabData = get().tabDataMap[currentTabId];
       if (!currentTabData?.analysisResult) return state;
 
       const updatedItems = [...currentTabData.analysisResult.items, ...newItems];
@@ -84,10 +93,7 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
           ...state.tabDataMap,
           [currentTabId]: {
             ...currentTabData,
-            analysisResult: {
-              ...currentTabData.analysisResult,
-              items: updatedItems,
-            },
+            analysisResult: { ...currentTabData.analysisResult, items: updatedItems },
           },
         },
       };
@@ -102,10 +108,8 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
       tabDataMap: {
         ...state.tabDataMap,
         [currentTabId]: {
-          ...state.tabDataMap[currentTabId],
-          analysisResult: state.tabDataMap[currentTabId]?.analysisResult || null,
+          ...getOrCreateTabData(state.tabDataMap, currentTabId),
           filter,
-          searchTerm: state.tabDataMap[currentTabId]?.searchTerm || '',
         },
       },
     }));
@@ -119,9 +123,7 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
       tabDataMap: {
         ...state.tabDataMap,
         [currentTabId]: {
-          ...state.tabDataMap[currentTabId],
-          analysisResult: state.tabDataMap[currentTabId]?.analysisResult || null,
-          filter: state.tabDataMap[currentTabId]?.filter || 'all',
+          ...getOrCreateTabData(state.tabDataMap, currentTabId),
           searchTerm: term,
         },
       },

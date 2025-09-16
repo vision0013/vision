@@ -8,6 +8,13 @@ import { Header } from './extension-header';
 import { Stats } from './crawling-summary';
 import { ResultsList } from './crawling-results';
 
+const LoadingSpinner: React.FC = () => (
+  <div className="spinner-container">
+    <div className="spinner"></div>
+    <p>AI가 계획을 세우고 있습니다...</p>
+  </div>
+);
+
 const SidePanel: React.FC = () => {
   const {
     analysisResult,
@@ -23,15 +30,18 @@ const SidePanel: React.FC = () => {
     onToggleListening,
     onExportData,
     activeElementId,
-    // Markdown related from controller
     markdownContent,
     pageTitle,
     isExtracting,
     onExtract,
     onDownload,
+    // ✨ [복구 및 추가]
+    isLoading,
+    mode,
+    onModeChange,
   } = useSidePanelController();
   
-  const [activeTab, setActiveTab] = useState('crawler'); // 'crawler' or 'markdown'
+  const [activeTab, setActiveTab] = useState('crawler');
 
   if (!analysisResult) {
     return <div className="app" style={{ padding: '20px', textAlign: 'center' }}>Loading page data...</div>;
@@ -39,6 +49,9 @@ const SidePanel: React.FC = () => {
   
   return (
     <div className="app">
+      {/* ✨ [복구 및 추가] isLoading이 true일 때 전체 화면에 스피너 표시 */}
+      {isLoading && <LoadingSpinner />}
+
       <Header
         isListening={isListening}
         onToggleListening={onToggleListening}
@@ -53,7 +66,21 @@ const SidePanel: React.FC = () => {
         transcribedText={transcribedText}
       />
 
-      {/* TAB BUTTONS */}
+      {/* ✨ [신규] 모드 전환 UI */}
+      <div className="mode-switcher">
+        <button 
+          onClick={() => onModeChange('navigate')} 
+          className={`mode-button ${mode === 'navigate' ? 'active' : ''}`}>
+          탐색 모드
+        </button>
+        <button 
+          onClick={() => onModeChange('search')} 
+          className={`mode-button ${mode === 'search' ? 'active' : ''}`}>
+          검색 모드
+        </button>
+      </div>
+
+      {/* ✨ [복구] 기존 탭 버튼 UI */}
       <div className="tab-container">
         <button onClick={() => setActiveTab('crawler')} className={`tab-button ${activeTab === 'crawler' ? 'active' : ''}`}>
           크롤링
@@ -63,7 +90,7 @@ const SidePanel: React.FC = () => {
         </button>
       </div>
 
-      {/* CRAWLER TAB CONTENT */}
+      {/* ✨ [복구] 크롤러 탭 컨텐츠 */}
       {activeTab === 'crawler' && (
         <div className="tab-content">
           <Stats analysisResult={analysisResult} />
@@ -81,7 +108,7 @@ const SidePanel: React.FC = () => {
         </div>
       )}
 
-      {/* MARKDOWN TAB CONTENT */}
+      {/* ✨ [복구] 마크다운 탭 컨텐츠 */}
       {activeTab === 'markdown' && (
         <div className="tab-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
@@ -89,11 +116,11 @@ const SidePanel: React.FC = () => {
               {isExtracting ? '추출 중...' : '본문 전체 추출'}
             </button>
           </div>
-          {pageTitle && <h3 style={{fontSize: '16px', marginBottom: '8px', color: '#333'}}>{pageTitle}</h3>} 
+          {pageTitle && <h3 style={{fontSize: '16px'}}>{pageTitle}</h3>} 
           <textarea 
             readOnly 
             value={markdownContent} 
-            style={{width: '100%', height: '100%', flex: 1, resize: 'none', padding: '8px', border: '1px solid #ccc', borderRadius: '4px'}}
+            style={{width: '100%', flex: 1, resize: 'none'}}
             placeholder="여기에 추출된 마크다운 내용이 표시됩니다."
           />
           <div>
