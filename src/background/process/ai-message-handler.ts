@@ -73,6 +73,21 @@ export async function handleAIMessage(
         if (msg.action === expectedResponse && msg.requestId === requestId) {
           chrome.runtime.onMessage.removeListener(listener);
           clearTimeout(timeoutId); // 타임아웃 취소
+
+          // 모델 로드 완료 시 상태 메시지 추가 전송
+          if (request.action === 'loadAIModel' && msg.status) {
+            try {
+              chrome.runtime.sendMessage({
+                action: 'modelStatusResponse',
+                status: msg.status // aiInitialized 응답의 상태를 그대로 전달
+              }).catch(() => {
+                // 메시지 전송 실패는 조용히 무시
+              });
+            } catch (error) {
+              console.warn('⚠️ [ai-handler] Failed to send model status after load:', error);
+            }
+          }
+
           resolve(msg);
         }
       };
@@ -233,6 +248,18 @@ export async function handleSwitchModel(modelId: string, token?: string): Promis
           action: 'modelSwitched',
           modelId: modelId,
           modelName: AVAILABLE_MODELS[modelId]?.name || modelId
+        }).catch(() => {
+          // 메시지 전송 실패는 조용히 무시
+        });
+
+        // 모델 전환 후 상태를 "로드 필요"로 업데이트
+        chrome.runtime.sendMessage({
+          action: 'modelStatusResponse',
+          status: {
+            state: 1, // 모델 선택됨, 로드 필요
+            error: undefined,
+            currentModelId: modelId
+          }
         }).catch(() => {
           // 메시지 전송 실패는 조용히 무시
         });

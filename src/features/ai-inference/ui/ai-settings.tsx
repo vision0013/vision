@@ -97,6 +97,13 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         setModelStates(statesResponse.states);
       }
 
+      // AI 모델 로드 상태 요청 (추가)
+      const statusResponse = await chrome.runtime.sendMessage({ action: 'getAIModelStatus' });
+      if (statusResponse.success && statusResponse.status) {
+        console.log('📊 [ai-settings] Initial AI model status:', statusResponse.status);
+        setAiModelStatus(statusResponse.status);
+      }
+
       // 다운로드 진행률 요청
       const progressResponse = await chrome.runtime.sendMessage({ action: 'getDownloadProgress' });
       if (progressResponse.success && progressResponse.progress) {
@@ -105,7 +112,7 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     } catch (error) {
       console.error('❌ [ai-settings] Failed to load model data:', error);
     }
-  }, []);
+  }, [setAiModelStatus]);
 
   useEffect(() => {
     if (isOpen) {
@@ -152,6 +159,10 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     try {
       console.log(`🔄 [ai-settings] Switching to model: ${modelId}`);
 
+      // 모델 전환 시작 - 상태를 로딩으로 변경
+      clearAiError();
+      setAiModelStatus({ state: 2, error: undefined }); // 2: 로딩중
+
       const response = await chrome.runtime.sendMessage({
         action: 'switchAIModel',
         modelId,
@@ -163,20 +174,37 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         setCurrentModelId(modelId);
         console.log(`✅ [ai-settings] Model switched to: ${availableModels[modelId]?.name}`);
 
+        // 모델 전환 완료 - 로드 필요 상태로 변경
+        setAiModelStatus({
+          state: 1, // 1: 모델 선택됨, 로드 필요
+          error: undefined
+        });
+
         // 상태 데이터 새로고침
         setTimeout(() => {
           loadModelData();
         }, 500);
 
         // 성공 메시지 표시
-        alert(`✅ 모델이 성공적으로 전환되었습니다!
+        alert(`✅ 모델이 전환되었습니다!
 
-새 모델: ${availableModels[modelId]?.name}`);
+새 모델: ${availableModels[modelId]?.name}
+
+이제 "모델 로드" 버튼을 눌러 실제 로딩을 시작하세요.`);
       } else {
+        // 실패 시 상태를 에러로 변경
+        setAiModelStatus({
+          state: 4, // 4: 에러
+          error: response.error || '모델 전환에 실패했습니다'
+        });
         throw new Error(response.error || '모델 전환에 실패했습니다');
       }
     } catch (error: any) {
       console.error('❌ [ai-settings] Model switch failed:', error);
+      setAiModelStatus({
+        state: 4, // 4: 에러
+        error: error.message
+      });
       alert(`❌ 모델 전환 실패: ${error.message}`);
     }
   };

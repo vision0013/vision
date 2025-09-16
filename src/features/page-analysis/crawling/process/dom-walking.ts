@@ -6,9 +6,9 @@ import { getElementStateAndActionability, isCurrentlyVisible, roleOf, bbox } fro
 import { coordinateTransformer } from './coordinate-transformer';
 
 export function walkElement(
-  el: Element, 
-  state: CrawlerState, 
-  parentElId: number | null = null, 
+  el: Element,
+  state: CrawlerState,
+  parentElId: number | null = null,
   isDescendantOfLink: boolean = false,
   isDescendantOfButton: boolean = false
 ): void {
