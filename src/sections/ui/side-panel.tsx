@@ -1,6 +1,4 @@
-/* domains/side-panel/sections/ui/SidePanel.tsx
-*/
-import React from 'react';
+import React, { useState } from 'react';
 import './side-panel.css';
 import { useSidePanelController } from '../../features';
 import { TranscriptionDisplay } from '../../features';
@@ -10,10 +8,17 @@ import { Header } from './extension-header';
 import { Stats } from './crawling-summary';
 import { ResultsList } from './crawling-results';
 
+const LoadingSpinner: React.FC = () => (
+  <div className="spinner-container">
+    <div className="spinner"></div>
+    <p>AI가 계획을 세우고 있습니다...</p>
+  </div>
+);
+
 const SidePanel: React.FC = () => {
   const {
     analysisResult,
-    recognitionError, // 컨트롤러에서 에러 상태를 받아옵니다.
+    recognitionError,
     filter,
     onFilterChange,
     searchTerm,
@@ -24,9 +29,19 @@ const SidePanel: React.FC = () => {
     transcribedText,
     onToggleListening,
     onExportData,
-    // ✨ [신규] 현재 활성화된 요소 ID
     activeElementId,
+    markdownContent,
+    pageTitle,
+    isExtracting,
+    onExtract,
+    onDownload,
+    // ✨ [복구 및 추가]
+    isLoading,
+    mode,
+    onModeChange,
   } = useSidePanelController();
+  
+  const [activeTab, setActiveTab] = useState('crawler');
 
   if (!analysisResult) {
     return <div className="app" style={{ padding: '20px', textAlign: 'center' }}>Loading page data...</div>;
@@ -34,6 +49,9 @@ const SidePanel: React.FC = () => {
   
   return (
     <div className="app">
+      {/* ✨ [복구 및 추가] isLoading이 true일 때 전체 화면에 스피너 표시 */}
+      {isLoading && <LoadingSpinner />}
+
       <Header
         isListening={isListening}
         onToggleListening={onToggleListening}
@@ -41,7 +59,6 @@ const SidePanel: React.FC = () => {
         hasAnalysisResult={!!analysisResult}
       />
       
-      {/* 에러 상태에 따라 PermissionsError 컴포넌트를 조건부 렌더링합니다. */}
       {recognitionError === 'not-allowed' && <PermissionsError />}
       
       <TranscriptionDisplay
@@ -49,20 +66,70 @@ const SidePanel: React.FC = () => {
         transcribedText={transcribedText}
       />
 
-      <Stats analysisResult={analysisResult} />
+      {/* ✨ [신규] 모드 전환 UI */}
+      <div className="mode-switcher">
+        <button 
+          onClick={() => onModeChange('navigate')} 
+          className={`mode-button ${mode === 'navigate' ? 'active' : ''}`}>
+          탐색 모드
+        </button>
+        <button 
+          onClick={() => onModeChange('search')} 
+          className={`mode-button ${mode === 'search' ? 'active' : ''}`}>
+          검색 모드
+        </button>
+      </div>
 
-      <FilterControls
-        filter={filter}
-        onFilterChange={onFilterChange}
-        searchTerm={searchTerm}
-        onSearchTermChange={onSearchTermChange}
-      />
+      {/* ✨ [복구] 기존 탭 버튼 UI */}
+      <div className="tab-container">
+        <button onClick={() => setActiveTab('crawler')} className={`tab-button ${activeTab === 'crawler' ? 'active' : ''}`}>
+          크롤링
+        </button>
+        <button onClick={() => setActiveTab('markdown')} className={`tab-button ${activeTab === 'markdown' ? 'active' : ''}`}>
+          마크다운 저장
+        </button>
+      </div>
 
-      <ResultsList
-        items={filteredItems}
-        onItemClick={onItemClick}
-        activeElementId={activeElementId}
-      />
+      {/* ✨ [복구] 크롤러 탭 컨텐츠 */}
+      {activeTab === 'crawler' && (
+        <div className="tab-content">
+          <Stats analysisResult={analysisResult} />
+          <FilterControls
+            filter={filter}
+            onFilterChange={onFilterChange}
+            searchTerm={searchTerm}
+            onSearchTermChange={onSearchTermChange}
+          />
+          <ResultsList
+            items={filteredItems}
+            onItemClick={onItemClick}
+            activeElementId={activeElementId}
+          />
+        </div>
+      )}
+
+      {/* ✨ [복구] 마크다운 탭 컨텐츠 */}
+      {activeTab === 'markdown' && (
+        <div className="tab-content" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <button onClick={onExtract} className="btn btn-primary" disabled={isExtracting}>
+              {isExtracting ? '추출 중...' : '본문 전체 추출'}
+            </button>
+          </div>
+          {pageTitle && <h3 style={{fontSize: '16px'}}>{pageTitle}</h3>} 
+          <textarea 
+            readOnly 
+            value={markdownContent} 
+            style={{width: '100%', flex: 1, resize: 'none'}}
+            placeholder="여기에 추출된 마크다운 내용이 표시됩니다."
+          />
+          <div>
+            <button onClick={onDownload} className="btn btn-secondary" disabled={!markdownContent || isExtracting}>
+              마크다운 다운로드
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

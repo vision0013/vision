@@ -1,88 +1,97 @@
 // 탭 상태 관리자 - Map 기반 고성능 상태 관리
 
 import { TabState, ActiveElementState } from '../../types/background-types';
+import { CrawledItem, Mode } from '../../../types'; // ✨ [수정] Mode 임포트 경로 변경
 
 export class TabStateManager {
   private states = new Map<number, TabState>();
 
-  /**
-   * URL 업데이트 - 중복 체크 포함
-   */
   updateUrl(tabId: number, newUrl: string): boolean {
     const state = this.getOrCreate(tabId);
     if (state.lastUrl === newUrl) return false;
-    
     state.lastUrl = newUrl;
     return true;
   }
 
-  /**
-   * 디바운스 타이머 설정
-   */
   setDebounce(tabId: number, callback: () => void, delay: number): void {
     const state = this.getOrCreate(tabId);
-    
-    // 기존 타이머 클리어
-    if (state.debounceTimeout) {
-      clearTimeout(state.debounceTimeout);
-    }
-    
+    if (state.debounceTimeout) clearTimeout(state.debounceTimeout);
     state.debounceTimeout = setTimeout(callback, delay);
   }
 
-  /**
-   * 활성 요소 상태 설정
-   */
   setActiveElement(tabId: number, ownerId: number | null): void {
     const state = this.getOrCreate(tabId);
-    state.activeElement = { 
-      ownerId, 
-      timestamp: Date.now() 
-    };
+    state.activeElement = { ownerId, timestamp: Date.now() };
   }
 
-  /**
-   * 활성 요소 상태 조회
-   */
   getActiveElement(tabId: number): ActiveElementState | undefined {
     return this.states.get(tabId)?.activeElement;
   }
 
-  /**
-   * 탭 상태 전체 조회
-   */
+  setCrawledData(tabId: number, items: CrawledItem[]): void {
+    const state = this.getOrCreate(tabId);
+    state.crawledItems = items;
+  }
+
+  appendCrawledData(tabId: number, newItems: CrawledItem[]): void {
+    const state = this.getOrCreate(tabId);
+    if (!state.crawledItems) state.crawledItems = [];
+    state.crawledItems.push(...newItems);
+  }
+
+  getCrawledData(tabId: number): CrawledItem[] | undefined {
+    return this.states.get(tabId)?.crawledItems;
+  }
+
+  setViewport(tabId: number, viewport: { width: number; height: number }): void {
+    const state = this.getOrCreate(tabId);
+    state.viewport = viewport;
+  }
+
+  getViewport(tabId: number): { width: number; height: number } | undefined {
+    return this.states.get(tabId)?.viewport;
+  }
+
+  setMode(tabId: number, mode: Mode): void {
+    const state = this.getOrCreate(tabId);
+    state.mode = mode;
+    console.log(`[TabStateManager] Mode for tab ${tabId} set to: ${mode}`);
+  }
+
+  getMode(tabId: number): Mode | undefined {
+    return this.states.get(tabId)?.mode;
+  }
+
   getTabState(tabId: number): TabState | undefined {
     return this.states.get(tabId);
   }
 
-  /**
-   * 탭 정리 (탭 닫힐 때)
-   */
   cleanup(tabId: number): void {
     const state = this.states.get(tabId);
-    if (state?.debounceTimeout) {
-      clearTimeout(state.debounceTimeout);
+    if (state) {
+      if (state.debounceTimeout) clearTimeout(state.debounceTimeout);
+      state.crawledItems = undefined;
+      state.viewport = undefined;
+      state.mode = undefined;
     }
     this.states.delete(tabId);
+    console.log(`[TabStateManager] Cleaned up state for tab ${tabId}`);
   }
 
-  /**
-   * 전체 탭 수 조회 (디버깅용)
-   */
   getTabCount(): number {
     return this.states.size;
   }
 
-  /**
-   * 상태 가져오거나 생성
-   */
   private getOrCreate(tabId: number): TabState {
     if (!this.states.has(tabId)) {
-      this.states.set(tabId, {});
+      this.states.set(tabId, { 
+        crawledItems: [], 
+        viewport: { width: 0, height: 0 },
+        mode: 'navigate' 
+      });
     }
     return this.states.get(tabId)!;
   }
 }
 
-// 싱글톤 인스턴스 (Background에서 하나만 사용)
 export const tabStateManager = new TabStateManager();

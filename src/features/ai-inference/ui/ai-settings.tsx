@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSidePanelStore } from '../../side-panel-management/process/panel-store';
 import { AI_TEST_SETS, AITestSetKey, AITestResult, AITestSummary } from '../config/test-cases';
+import { ModelSelector } from './model-selector';
+import { DownloadProgressModal } from './download-progress-modal';
+import { AvailableModels, ModelDownloadProgress } from '../types/ai-types';
 
 interface LearningSnapshot {
   id: string;
@@ -16,11 +19,6 @@ interface LearningSnapshot {
   description?: string;
 }
 
-const MODEL_INFO = {
-  name: "Gemma 3 4B Model",
-  size: "~2.56 GB",
-  repoUrl: "https://huggingface.co/litert-community/Gemma3-4B-IT"
-};
 
 interface AISettingsProps {
   isOpen: boolean;
@@ -31,13 +29,19 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
   // 디버깅: Panel 인스턴스 생성 추적
   console.log('🔍 [AISettings] Component instance created/rendered at:', Date.now());
   
-  const { aiModelStatus, setAiModelStatus, setAiError, clearAiError } = useSidePanelStore();
-  const [hfToken, setHfToken] = useState('');
+  const { aiModelStatus, setAiModelStatus, clearAiError } = useSidePanelStore();
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResults, setTestResults] = useState<AITestSummary | null>(null);
   const [learnedStats, setLearnedStats] = useState<{count: number, size: number} | null>(null);
   const [snapshots, setSnapshots] = useState<LearningSnapshot[]>([]);
   const [showSnapshots, setShowSnapshots] = useState(false);
+
+  // 다중 모델 지원 상태
+  const [availableModels, setAvailableModels] = useState<AvailableModels>({});
+  const [currentModelId, setCurrentModelId] = useState<string>('');
+  const [downloadProgress, setDownloadProgress] = useState<ModelDownloadProgress | null>(null);
+  const [modelStates, setModelStates] = useState<Record<string, { exists: boolean; size?: number }>>({});
+  const [showModelSelector, setShowModelSelector] = useState(false);
 
   // 함수들을 useCallback으로 안정화 (useEffect보다 먼저 선언)
   const loadLearnedStats = useCallback(async () => {
@@ -77,53 +81,163 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     }
   }, [aiModelStatus.state]);
 
+  // 다중 모델 데이터 로드
+  const loadModelData = useCallback(async () => {
+    try {
+      // 사용 가능한 모델 목록 요청
+      const modelsResponse = await chrome.runtime.sendMessage({ action: 'getAvailableModels' });
+      if (modelsResponse.success) {
+        setAvailableModels(modelsResponse.models);
+        setCurrentModelId(modelsResponse.currentModelId);
+      }
+
+      // 모델 상태 요청
+      const statesResponse = await chrome.runtime.sendMessage({ action: 'getAllModelsStatus' });
+      if (statesResponse.success) {
+        setModelStates(statesResponse.states);
+      }
+
+      // AI 모델 로드 상태 요청 (추가)
+      const statusResponse = await chrome.runtime.sendMessage({ action: 'getAIModelStatus' });
+      if (statusResponse.success && statusResponse.status) {
+        console.log('📊 [ai-settings] Initial AI model status:', statusResponse.status);
+        setAiModelStatus(statusResponse.status);
+      }
+
+      // 다운로드 진행률 요청
+      const progressResponse = await chrome.runtime.sendMessage({ action: 'getDownloadProgress' });
+      if (progressResponse.success && progressResponse.progress) {
+        setDownloadProgress(progressResponse.progress);
+      }
+    } catch (error) {
+      console.error('❌ [ai-settings] Failed to load model data:', error);
+    }
+  }, [setAiModelStatus]);
+
   useEffect(() => {
     if (isOpen) {
-      chrome.storage.local.get(['hfToken'], (result) => {
-        if (result.hfToken) {
-          setHfToken(result.hfToken);
-        }
-      });
+      loadModelData();
 
       const messageListener = (message: any) => {
         console.log('🔄 [ai-settings] Received message:', message.action, JSON.stringify(message, null, 2));
+
         if (['modelStatusResponse', 'modelLoaded', 'modelDeleted', 'aiInitialized'].includes(message.action)) {
-            console.log('📊 [ai-settings] Updating AI model status:', JSON.stringify(message.status, null, 2));
-            setAiModelStatus(message.status);
-            // 모델 로드 완료 시 학습 현황과 스냅샷도 로드
-            if (message.status?.state === 3) {
-              setTimeout(() => {
-                loadLearnedStats();
-                loadSnapshots();
-              }, 100);
-            }
+          console.log('📊 [ai-settings] Updating AI model status:', JSON.stringify(message.status, null, 2));
+          setAiModelStatus(message.status);
+
+          // 모델 로드 완료 시 학습 현황과 스냅샷도 로드
+          if (message.status?.state === 3) {
+            setTimeout(() => {
+              loadLearnedStats();
+              loadSnapshots();
+            }, 100);
+          }
+        }
+
+        // 다운로드 진행률 업데이트
+        if (message.action === 'downloadProgress') {
+          setDownloadProgress(message.progress);
+          console.log('📥 [ai-settings] Download progress updated:', message.progress);
+        }
+
+        // 모델 전환 완료
+        if (message.action === 'modelSwitched') {
+          console.log(`🔄 [ai-settings] Model switched notification: ${message.modelId}`);
+          setCurrentModelId(message.modelId);
+          loadModelData(); // 상태 새로고침
         }
       };
+
       chrome.runtime.onMessage.addListener(messageListener);
       return () => chrome.runtime.onMessage.removeListener(messageListener);
     }
-  }, [isOpen, setAiModelStatus, loadLearnedStats, loadSnapshots]); // useCallback으로 안정화된 함수들
+  }, [isOpen, setAiModelStatus, loadLearnedStats, loadSnapshots, loadModelData]);
 
 
-  const handleSaveAndDownload = async () => {
-    if (!hfToken) {
-      alert('Please enter a Hugging Face API token.');
+  // 다중 모델 지원 핸들러들
+  const handleModelSwitch = async (modelId: string, token?: string) => {
+    try {
+      console.log(`🔄 [ai-settings] Switching to model: ${modelId}`);
+
+      // 모델 전환 시작 - 상태를 로딩으로 변경
+      clearAiError();
+      setAiModelStatus({ state: 2, error: undefined }); // 2: 로딩중
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'switchAIModel',
+        modelId,
+        token
+      });
+
+      if (response.success) {
+        // 즉시 UI 업데이트
+        setCurrentModelId(modelId);
+        console.log(`✅ [ai-settings] Model switched to: ${availableModels[modelId]?.name}`);
+
+        // 모델 전환 완료 - 로드 필요 상태로 변경
+        setAiModelStatus({
+          state: 1, // 1: 모델 선택됨, 로드 필요
+          error: undefined
+        });
+
+        // 상태 데이터 새로고침
+        setTimeout(() => {
+          loadModelData();
+        }, 500);
+
+        // 성공 메시지 표시
+        alert(`✅ 모델이 전환되었습니다!
+
+새 모델: ${availableModels[modelId]?.name}
+
+이제 "모델 로드" 버튼을 눌러 실제 로딩을 시작하세요.`);
+      } else {
+        // 실패 시 상태를 에러로 변경
+        setAiModelStatus({
+          state: 4, // 4: 에러
+          error: response.error || '모델 전환에 실패했습니다'
+        });
+        throw new Error(response.error || '모델 전환에 실패했습니다');
+      }
+    } catch (error: any) {
+      console.error('❌ [ai-settings] Model switch failed:', error);
+      setAiModelStatus({
+        state: 4, // 4: 에러
+        error: error.message
+      });
+      alert(`❌ 모델 전환 실패: ${error.message}`);
+    }
+  };
+
+  const handleModelDownload = async (modelId: string, token?: string) => {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'downloadAIModel',
+        modelId,
+        token
+      });
+    } catch (error: any) {
+      console.error('❌ [ai-settings] Model download failed:', error);
+      alert(`모델 다운로드 실패: ${error.message}`);
+    }
+  };
+
+  const handleModelDelete = async (modelId: string) => {
+    if (!confirm(`${availableModels[modelId]?.name || modelId} 모델을 삭제하시겠습니까?`)) {
       return;
     }
-    
-    clearAiError();
-    setAiModelStatus({ state: 2, error: undefined }); // 로딩 중
-    
-    try {
-      await chrome.storage.local.set({ hfToken });
-      console.log(' M [settings-ui] Token saved.');
 
-      chrome.runtime.sendMessage({ 
-        action: 'downloadAIModel', 
-        token: hfToken
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'deleteAIModel',
+        modelId
       });
-    } catch (error) {
-      setAiError(error);
+
+      // 상태 새로고침
+      loadModelData();
+    } catch (error: any) {
+      console.error('❌ [ai-settings] Model deletion failed:', error);
+      alert(`모델 삭제 실패: ${error.message}`);
     }
   };
 
@@ -137,16 +251,6 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     chrome.runtime.sendMessage({ action: 'loadAIModel' });
   };
 
-  const deleteModel = async () => {
-    if (confirm('Are you sure you want to delete the AI model?')) {
-      try {
-        await chrome.runtime.sendMessage({ action: 'deleteAIModel' });
-      } catch (error) {
-        console.error('❌ Model deletion failed:', error);
-        setAiError(error);
-      }
-    }
-  };
 
   const createManualSnapshot = async () => {
     const description = prompt('스냅샷 설명을 입력해주세요 (선택사항):');
@@ -276,6 +380,30 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
     } catch (error: any) {
       console.error('❌ [ai-settings] Failed to learn from failed tests:', error);
       alert(`❌ 학습 요청 중 오류가 발생했습니다: ${error.message}`);
+    }
+  };
+
+  // 🤖 AI 음성 명령 실제 실행 테스트 (신규)
+  const testAIVoiceCommand = async (userInput: string) => {
+    console.log('🤖 [ui] Testing AI voice command:', userInput);
+
+    try {
+      // Background에 AI 기반 음성 명령 실행 요청
+      const response = await chrome.runtime.sendMessage({
+        action: 'executeAIVoiceCommand',
+        userInput: userInput
+      });
+
+      console.log('✅ [ui] AI voice command response:', response);
+
+      if (response.success) {
+        alert(`✅ AI 음성 명령 실행 완료!\n\n명령: "${userInput}"\n실행된 단계: ${response.results.length}개`);
+      } else {
+        alert(`❌ AI 음성 명령 실행 실패!\n\n명령: "${userInput}"\n오류: ${response.error}`);
+      }
+    } catch (error: any) {
+      console.error('❌ [ui] AI voice command error:', error);
+      alert(`❌ AI 음성 명령 처리 중 오류 발생!\n\n${error.message}`);
     }
   };
 
@@ -442,106 +570,166 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
         </div>
         
         <div className="ai-settings-content">
-          <div className="model-info">
-            <h4>{MODEL_INFO.name}</h4>
-            <p>To use AI features, please provide a Hugging Face API token.</p>
-            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer">Get your token here.</a>
-            <p style={{marginTop: '10px'}}>After agreeing to the <a href={MODEL_INFO.repoUrl} target="_blank" rel="noopener noreferrer">model license</a>, your token will allow the extension to download the model.</p>
+          {/* 모델 선택기 섬션 */}
+          <div className="model-selector-section" style={{marginBottom: '20px'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
+              <h4 style={{margin: 0}}>🤖 AI 모델 관리</h4>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowModelSelector(!showModelSelector)}
+                style={{fontSize: '12px', padding: '6px 12px'}}
+              >
+                {showModelSelector ? '단순 보기' : '전체 모델 보기'}
+              </button>
+            </div>
+
+            {showModelSelector ? (
+              <ModelSelector
+                availableModels={availableModels}
+                currentModelId={currentModelId}
+                downloadProgress={downloadProgress}
+                onModelSwitch={handleModelSwitch}
+                onModelDownload={handleModelDownload}
+                onModelDelete={handleModelDelete}
+                modelStates={modelStates}
+              />
+            ) : (
+              <div className="current-model-summary" style={{
+                padding: '20px',
+                backgroundColor: currentModelId ? '#e8f5e8' : '#f8f9fa',
+                borderRadius: '8px',
+                border: `2px solid ${currentModelId ? '#28a745' : '#dee2e6'}`,
+                position: 'relative'
+              }}>
+                {/* 현재 모델 배지 */}
+                {currentModelId && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    left: '15px',
+                    backgroundColor: '#28a745',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}>
+                    ✅ 현재 모델
+                  </div>
+                )}
+
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <div style={{flex: 1}}>
+                    <div style={{fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: '#333'}}>
+                      {availableModels[currentModelId]?.name || '모델이 선택되지 않음'}
+                    </div>
+                    <div style={{fontSize: '13px', color: '#666', marginBottom: '8px'}}>
+                      {availableModels[currentModelId]?.description || '사용 가능한 모델을 선택하고 다운로드해주세요'}
+                    </div>
+                    {currentModelId && availableModels[currentModelId] && (
+                      <div style={{fontSize: '12px', color: '#555'}}>
+                        <span style={{marginRight: '15px'}}>
+                          💾 크기: {availableModels[currentModelId].size}
+                        </span>
+                        <span style={{marginRight: '15px'}}>
+                          ⚡ 양자화: {availableModels[currentModelId].quantization}
+                        </span>
+                        <span>
+                          {availableModels[currentModelId].requiresToken ? '🔑 인증 필요' : '🔓 인증 불필요'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 우측 상태 인디케이터 */}
+                  <div style={{textAlign: 'center'}}>
+                    {downloadProgress && downloadProgress.status === 'downloading' && (
+                      <div style={{fontSize: '14px', color: '#007bff', fontWeight: 'bold'}}>
+                        📥 {downloadProgress.progress}%
+                      </div>
+                    )}
+                    {aiModelStatus.state === 3 && currentModelId && (
+                      <div style={{fontSize: '14px', color: '#28a745', fontWeight: 'bold'}}>
+                        🚀 로드 완료
+                      </div>
+                    )}
+                    {aiModelStatus.state === 4 && currentModelId && (
+                      <div style={{fontSize: '14px', color: '#ffc107', fontWeight: 'bold'}}>
+                        📦 로드 대기
+                      </div>
+                    )}
+                    {!currentModelId && (
+                      <div style={{fontSize: '14px', color: '#dc3545', fontWeight: 'bold'}}>
+                        ❌ 모델 없음
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="model-status">
+          {/* 현재 모델 상태 */}
+          <div className="model-status" style={{marginBottom: '20px'}}>
             {aiModelStatus.state === 1 && (
               <div style={{color: '#6c757d', marginBottom: '15px'}}>
-                🤖 No AI model found. Please download the model first.
+                🤖 AI 모델이 로드되지 않았습니다. 모델을 다운로드하거나 로드해주세요.
               </div>
             )}
-            
+
             {aiModelStatus.state === 2 && (
               <div style={{color: '#007bff', marginBottom: '15px'}}>
-                ⏳ Loading model... {aiModelStatus.loadTime && `(${Math.floor(aiModelStatus.loadTime / 1000)}s)`}
+                ⏳ 모델 로딩 중... {aiModelStatus.loadTime && `(${Math.floor(aiModelStatus.loadTime / 1000)}s)`}
               </div>
             )}
-            
+
             {aiModelStatus.state === 3 && (
               <div style={{color: '#28a745', marginBottom: '15px'}}>
-                ✅ Model loaded in memory! 
+                ✅ 모델이 메모리에 로드되었습니다!
                 {aiModelStatus.modelSize && ` (${(aiModelStatus.modelSize / 1024 / 1024).toFixed(1)}MB)`}
-                {aiModelStatus.loadTime && ` in ${(aiModelStatus.loadTime / 1000).toFixed(1)}s`}
+                {aiModelStatus.loadTime && ` 로드 시간: ${(aiModelStatus.loadTime / 1000).toFixed(1)}s`}
               </div>
             )}
-            
+
             {aiModelStatus.state === 4 && (
               <div style={{color: '#ffc107', marginBottom: '15px'}}>
-                📦 Model found in cache but not loaded. Click "Load Model" to use AI features.
+                📦 모델이 캐시에 있지만 로드되지 않았습니다. "로드" 버튼을 누르세요.
               </div>
             )}
-            
+
             {aiModelStatus.error && (
               <div style={{color: '#dc3545', marginBottom: '15px'}}>
-                ❌ Error: {aiModelStatus.error}
+                ❌ 오류: {aiModelStatus.error}
               </div>
             )}
           </div>
 
-          <div className="token-input-section" style={{marginBottom: '20px'}}>
-            <label htmlFor="hf-token" style={{display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500'}}>Hugging Face Token</label>
-            <input 
-              id="hf-token"
-              type="password" 
-              value={hfToken}
-              onChange={(e) => setHfToken(e.target.value)}
-              placeholder="hf_..."
-              className="search-input"
-              style={{width: '100%'}}
-            />
-          </div>
-
-          <div className="model-actions">
-            {aiModelStatus.state === 1 && (
-              <button 
-                className="btn btn-primary download-btn"
-                onClick={handleSaveAndDownload}
-                disabled={false}
-              >
-                {`Save Token & Download Model (${MODEL_INFO.size})`}
-              </button>
-            )}
-            
+          {/* 모델 액션 버튼들 */}
+          <div className="model-actions" style={{marginBottom: '20px'}}>
             {aiModelStatus.state === 4 && (
-              <button 
+              <button
                 className="btn btn-success"
                 onClick={loadModel}
-                disabled={false}
+                style={{fontSize: '14px', padding: '8px 16px'}}
               >
-                🚀 Load Model from Cache
+                🚀 모델 로드
               </button>
             )}
-            
+
             {aiModelStatus.state === 3 && (
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px'}}>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
                 {Object.entries(AI_TEST_SETS).map(([key, testSet]) => (
-                  <button 
+                  <button
                     key={key}
                     className="btn btn-info"
                     onClick={() => runAutoTest(key as AITestSetKey)}
                     disabled={isTestRunning}
                     style={{fontSize: '12px', padding: '6px 12px'}}
                   >
-                    {isTestRunning ? '⏳ Testing...' : `🧪 ${testSet.name} (${testSet.cases.length})`}
+                    {isTestRunning ? '⏳ 테스트 중...' : `🧪 ${testSet.name} (${testSet.cases.length})`}
                   </button>
                 ))}
               </div>
-            )}
-            
-            {(aiModelStatus.state === 3 || aiModelStatus.state === 4) && (
-              <button 
-                className="btn btn-secondary delete-btn"
-                onClick={deleteModel}
-                disabled={false}
-                style={{marginLeft: aiModelStatus.state === 3 ? '10px' : '10px'}}
-              >
-                🗑️ Delete Model
-              </button>
             )}
           </div>
 
@@ -648,6 +836,60 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
+          {/* 🤖 AI 음성 명령 테스트 섹션 (신규) */}
+          {aiModelStatus.state === 3 && (
+            <div className="ai-voice-command-section" style={{marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px'}}>
+              <h4>🎤 AI 음성 명령 테스트</h4>
+              <div style={{backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '5px', marginBottom: '15px'}}>
+                <p style={{margin: '0 0 10px 0', fontSize: '13px', color: '#6c757d'}}>
+                  실제 음성 명령처럼 AI가 분석하여 액션 시퀀스로 변환 후 실행하는 테스트입니다.
+                </p>
+
+                <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("아이폰17 찾아줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    🔍 "아이폰17 찾아줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("로그인 버튼 클릭해줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    👆 "로그인 버튼 클릭해줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("장바구니에 담아줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    🛒 "장바구니에 담아줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("뒤로 가줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    ⬅️ "뒤로 가줘"
+                  </button>
+
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => testAIVoiceCommand("최저가 알려줘")}
+                    style={{fontSize: '12px', padding: '8px 12px'}}
+                  >
+                    💰 "최저가 알려줘"
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {testResults && (
             <div className="test-results-section" style={{marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '20px'}}>
               <h4>🧪 Test Results</h4>
@@ -713,6 +955,19 @@ export const AISettings: React.FC<AISettingsProps> = ({ isOpen, onClose }) => {
             </div>
           )}
         </div>
+
+        {/* 다운로드 진행률 모달 */}
+        {downloadProgress && downloadProgress.status === 'downloading' && (
+          <DownloadProgressModal
+            downloadProgress={downloadProgress}
+            availableModels={availableModels}
+            onCancel={() => {
+              // 다운로드 취소 요청
+              chrome.runtime.sendMessage({ action: 'cancelDownload' });
+              setDownloadProgress(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

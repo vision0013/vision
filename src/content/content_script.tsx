@@ -1,121 +1,194 @@
 // content_script.tsx
 import { pageCrawler, startDynamicObserver, stopDynamicObserver } from '../features/page-analysis/crawling';
-import { processVoiceCommand } from '../features/voice-commands';
 import { applyHighlightToElement, removeHighlightFromElement } from '../features/highlighting';
-import { AnalysisResult, CrawledItem } from '@/types';
 
-let currentAnalysisResult: AnalysisResult | null = null;
-let dynamicObserverActive = false;
-
-
-// ✨ [개선] executeVoiceAction 함수를 processVoiceCommand 호출로 대체
-function executeVoiceAction(request: any, items: CrawledItem[]) {
-  const { detectedAction, targetText, originalCommand, direction } = request;
-  
-  // ✨ [개선] payload 객체로 묶어서 전달
-  const result = processVoiceCommand({
-    detectedAction,
-    targetText,
-    direction,
-    originalCommand,
-    items
-  });
-  
-  console.log('🎯 [content] Action result:', result);
-}
-
-const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      await chrome.runtime.sendMessage(message);
-      return true;
-    } catch (error: any) {
-      if (error.message.includes('Extension context invalidated') || 
-          error.message.includes('Receiving end does not exist')) {
-        if (i < maxRetries - 1) {
-          const waitTime = 100 * Math.pow(2, i);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      } else {
-        console.error('❌ Unexpected runtime error:', error);
-        return false;
-      }
-    }
-  }
-  return false;
-};
-
-// URL 감지는 Background에서 담당하므로 Content Script에서는 제거
-
-const runCrawler = async () => {
-  if (dynamicObserverActive) {
-    stopDynamicObserver();
-    dynamicObserverActive = false;
-  }
-  
-  const analysisResult = pageCrawler.analyze();
-  currentAnalysisResult = analysisResult;
-  
-  const success = await safeRuntimeMessage({ 
-    action: 'crawlComplete', 
-    data: analysisResult 
-  });
-  
-  if (success) {
-    startDynamicObserver(pageCrawler, async (newItems: CrawledItem[]) => {
-      await safeRuntimeMessage({ 
-        action: 'addNewItems', 
-        data: newItems 
-      });
-    });
-    dynamicObserverActive = true;
-  }
-};
-
-
-// URL 변경 감지는 Background에서 Chrome API로 처리
-
-// 크롬 메시지 리스너
-chrome.runtime.onMessage.addListener(async (request, _sender, _sendResponse) => {
+// ✨ [리팩터링] 메시지 리스너는 모든 프레임에서 실행되도록 분리
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   try {
-    if (request.action === 'runCrawler') {
-      runCrawler();
-    }
-    
-    
-    if (request.action === 'activeElementChanged') {
-      // ✨ [수정] 중앙 상태 기반 하이라이팅 처리
-      if (request.ownerId) {
-        const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
+    switch (request.action) {
+      // ✨ 정밀 실행기: CLICK
+      case 'execute_click': {
+        const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLElement;
         if (element) {
-          applyHighlightToElement(element);
+          console.log(`🖱️ [content] Executing CLICK on ID: ${request.crawlerId}`, element);
+          element.click();
+          sendResponse({ success: true });
+        } else {
+          // 이 프레임에 요소가 없을 수 있으므로 에러 대신 단순 로그 기록
+          // console.log(`[content] CLICK: Element with ID ${request.crawlerId} not found in this frame.`);
+          sendResponse({ success: false, error: 'Element not found in this frame' });
         }
-      } else {
-        // ownerId가 null이면 모든 하이라이팅 제거
-        removeHighlightFromElement();
+        return true;
       }
-    }
-    
-    
-    if (request.action === 'processVoiceCommand') {
-      console.log('🎯 [content] Executing:', request.detectedAction, 'target:', request.targetText, 'direction:', request.direction);
-      if (currentAnalysisResult?.items) {
-        executeVoiceAction(request, currentAnalysisResult.items);
-      } else {
-        console.log('❌ No analysis data available');
+
+      // ✨ 정밀 실행기: INPUT
+      case 'execute_input': {
+        const element = document.querySelector(`[data-crawler-id="${request.crawlerId}"]`) as HTMLInputElement | HTMLTextAreaElement;
+        if (element) {
+          console.log(`⌨️ [content] Executing INPUT on ID: ${request.crawlerId} with value: "${request.value}"`, element);
+          element.value = request.value;
+          element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          sendResponse({ success: true });
+        } else {
+          // console.log(`[content] INPUT: Element with ID ${request.crawlerId} not found in this frame.`);
+          sendResponse({ success: false, error: 'Element not found in this frame' });
+        }
+        return true;
+      }
+
+      // ✨ 정밀 실행기: NAVIGATE (최상위 프레임에서만 의미 있음)
+      case 'execute_navigate': {
+        if (window.self === window.top) {
+          console.log(`🚀 [content] Executing NAVIGATE type: ${request.type}`);
+          if (request.type === 'back') {
+            if (window.history.length > 1) {
+              window.history.back();
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: 'Cannot go back' });
+            }
+          } else if (request.type === 'forward') {
+            window.history.forward();
+            sendResponse({ success: true });
+          } else if (request.type === 'refresh') {
+            window.location.reload();
+            sendResponse({ success: true });
+          } else if (request.url) {
+            // 기존 URL 네비게이션 지원 (혹시 필요할 경우)
+            window.location.href = request.url;
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'No navigation type or URL provided' });
+          }
+        }
+        return true;
+      }
+
+      // ✨ 정밀 실행기: SCROLL
+      case 'execute_scroll': {
+        console.log(`🔄 [content] Executing SCROLL direction: ${request.direction}, target: ${request.target}`);
+
+        // 특정 요소로 스크롤
+        if (request.target) {
+          const element = document.querySelector(`[data-crawler-id="${request.target}"]`) as HTMLElement;
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Target element not found' });
+          }
+        } else {
+          // 페이지 전체 스크롤
+          const scrollDistance = 300;
+          const currentY = window.scrollY;
+          const direction = request.direction || 'down';
+          const targetY = direction === 'up' ? currentY - scrollDistance : currentY + scrollDistance;
+
+          window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth'
+          });
+          sendResponse({ success: true });
+        }
+        return true;
       }
     }
   } catch (error: any) {
     console.error('❌ Message listener error:', error);
+    sendResponse({ success: false, error: error.message });
+    return true;
   }
 });
 
-window.addEventListener('beforeunload', () => {
-  if (dynamicObserverActive) {
-    stopDynamicObserver();
+// ✨ [리팩터링] 크롤러 및 페이지 분석 로직은 최상위 프레임에서만 실행
+if (window.self === window.top) {
+  console.log('✅ [content] Running in top-level frame. Initializing crawler and other listeners.');
+
+  let dynamicObserverActive = false;
+
+  const safeRuntimeMessage = async (message: any, maxRetries = 3): Promise<boolean> => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        await chrome.runtime.sendMessage(message);
+        return true;
+      } catch (error: any) {
+        if (error.message.includes('Extension context invalidated') || error.message.includes('Receiving end does not exist')) {
+          if (i < maxRetries - 1) {
+            const waitTime = 100 * Math.pow(2, i);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        } else {
+          console.error('❌ Unexpected runtime error:', error);
+          return false;
+        }
+      }
+    }
+    return false;
+  };
+
+  const runCrawler = async () => {
+    if (dynamicObserverActive) stopDynamicObserver();
     dynamicObserverActive = false;
-  }
-});
 
-// 초기화 및 크롤링 시작
-runCrawler();
+    const analysisResult = await pageCrawler.analyze();
+    const success = await safeRuntimeMessage({ 
+      action: 'crawlComplete', 
+      data: {
+        analysisResult,
+        viewport: { width: window.innerWidth, height: window.innerHeight }
+      } 
+    });
+
+    if (success) {
+      startDynamicObserver(pageCrawler, async (newItems) => {
+        await safeRuntimeMessage({ action: 'addNewItems', data: newItems });
+      });
+      dynamicObserverActive = true;
+    }
+  };
+
+  // 크롤링과 관련 없는 다른 메시지 리스너들
+  chrome.runtime.onMessage.addListener((request) => {
+    try {
+      switch (request.action) {
+        case 'runCrawler':
+          runCrawler();
+          break;
+
+        case 'FETCH_MAIN_CONTENT':
+          const selectors = ['#post-area', '.se-main-container', '#postViewArea', 'div.se_component_wrap', 'article.se_component_wrap', 'div.se-viewer', 'div.blog_content', 'div.post-view', 'div.post_content'];
+          let mainContentElement: Element | null = null;
+          for (const selector of selectors) {
+            mainContentElement = document.querySelector(selector);
+            if (mainContentElement) break;
+          }
+          if (mainContentElement) {
+            chrome.runtime.sendMessage({ action: 'PROCESS_HTML_TO_MARKDOWN', html: mainContentElement.innerHTML, title: document.title });
+          } else {
+            chrome.runtime.sendMessage({ action: 'MARKDOWN_RESULT', markdown: '오류: 네이버 블로그 본문 영역을 찾을 수 없습니다.', title: '추출 오류' });
+          }
+          break;
+
+        case 'activeElementChanged':
+          if (request.ownerId) {
+            const element = document.querySelector(`[data-crawler-id="${request.ownerId}"]`) as HTMLElement;
+            if (element) applyHighlightToElement(element);
+          } else {
+            removeHighlightFromElement();
+          }
+          break;
+      }
+    } catch (e) {
+      console.error('❌ Top-level message listener error:', e);
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (dynamicObserverActive) stopDynamicObserver();
+  });
+
+  runCrawler();
+
+} else {
+  console.log('🚫 [content] Running in iframe. Only execution listeners are active.');
+}

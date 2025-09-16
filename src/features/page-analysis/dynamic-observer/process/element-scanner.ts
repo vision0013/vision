@@ -1,20 +1,19 @@
 import { CrawledItem } from '@/types';
 import { CrawlerState } from '../../crawling/types/crawler-state';
 import { createCrawlerState } from '../../crawling/process/state-management';
+import { getElementStateAndActionability } from '../../crawling/process/element-analysis';
+import { normText } from '../../crawling/process/text-processing';
 
 export function scanChildrenWithoutIds(parentElement: HTMLElement): CrawledItem[] {
-  // 성능 최적화: 깊은 스캔 대신 직접 자식만 체크
   const tempState = createCrawlerState();
   const targetTags = ['a', 'button', 'input', 'textarea', 'select'];
   
-  // 직접 자식 요소들만 빠르게 스캔 (TreeWalker 대신 querySelector 사용)
   const selector = targetTags
     .map(tag => `${tag}:not([data-crawler-id])`)
     .join(', ');
   
   const elementsWithoutIds = parentElement.querySelectorAll(selector) as NodeListOf<HTMLElement>;
   
-  // 빠른 스캔: 중요한 요소들만 처리
   elementsWithoutIds.forEach(el => {
     walkSingleElement(el, tempState);
   });
@@ -27,47 +26,61 @@ export function scanChildrenWithoutIds(parentElement: HTMLElement): CrawledItem[
 }
 
 export function walkSingleElement(el: HTMLElement, state: CrawlerState): void {
-  // 기존 walkElement 로직을 단일 요소용으로 단순화
   if (state.elIdMap.has(el)) {
     return;
   }
   
-  const ownerId = state.nextElementId++;
-  state.elIdMap.set(el, ownerId);
-  el.setAttribute('data-crawler-id', ownerId.toString());
+  // ✨ [수정] id를 유일한 ID로 사용
+  const id = state.nextElementId++;
+  state.elIdMap.set(el, id);
+  el.setAttribute('data-crawler-id', id.toString());
   
-  // 기본 메타데이터 저장
   const tag = el.tagName.toLowerCase();
   const meta = {
     tag,
     role: el.getAttribute('role') || '',
     rect: el.getBoundingClientRect(),
-    parentId: null,
+    parentId: null, // 단일 스캔에서는 부모 컨텍스트가 없음
   };
-  state.elMeta.set(ownerId, meta);
+  state.elMeta.set(id, meta);
+
+  const { state: elementState, isClickable, isInputtable } = getElementStateAndActionability(el);
   
-  // TARGET_TAGS 확인하여 크롤링 아이템 생성
   if (['a', 'button', 'input', 'textarea', 'select'].includes(tag)) {
     const isVisible = getComputedStyle(el).display !== 'none';
-    
+    const commonProps = { id, ownerId: id, parentId: null, tag, role: meta.role, rect: meta.rect, hidden: !isVisible, state: elementState, isClickable, isInputtable };
+
     if (tag === 'a') {
-      const href = el.getAttribute('href') || '';
-      const text = el.textContent?.trim() || '';
-      if (href || text) {
         state.items.push({
-          id: state.nextItemId++,
-          ownerId,
-          parentId: null,
-          tag,
-          role: meta.role,
-          rect: meta.rect,
-          type: 'link',
-          href,
-          text,
-          hidden: !isVisible
+          ...commonProps, type: 'link',
+          href: el.getAttribute('href') || '',
+          text: normText(el.textContent),
         });
-      }
+    } else if (tag === 'button') {
+        state.items.push({
+          ...commonProps, type: 'button',
+          label: normText(el.getAttribute("aria-label") || el.textContent || "") || "(no label)",
+        });
+    } else if (tag === 'input') {
+        const input = el as HTMLInputElement;
+        state.items.push({
+          ...commonProps, type: 'input',
+          inputType: input.type || "text",
+          placeholder: normText(input.placeholder || ""),
+          label: normText(el.getAttribute("aria-label") || input.name || "") || normText(input.placeholder || "") || `[${input.type} input]`,
+        });
+    } else if (tag === 'textarea') {
+        const textarea = el as HTMLTextAreaElement;
+        state.items.push({
+          ...commonProps, type: 'textarea',
+          placeholder: normText(textarea.placeholder || ""),
+          label: normText(el.getAttribute("aria-label") || textarea.name || "") || normText(textarea.placeholder || "") || "[textarea]",
+        });
+    } else if (tag === 'select') {
+        state.items.push({
+          ...commonProps, type: 'select',
+          label: normText(el.getAttribute("aria-label") || (el as HTMLSelectElement).name || "") || "[select]",
+        });
     }
-    // 다른 요소 타입들도 필요시 추가
   }
 }

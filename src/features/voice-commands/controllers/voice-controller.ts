@@ -7,7 +7,7 @@ import { inputAction } from "../process/input-action";
 import { navigationAction } from "../process/navigation-action";
 
 // ✨ [개선] 함수에 전달될 파라미터를 위한 인터페이스 정의
-interface CommandPayload {
+export interface CommandPayload {
   detectedAction: string;
   targetText: string;
   direction: 'up' | 'down' | null;
@@ -34,20 +34,21 @@ export function processVoiceCommand(payload: CommandPayload): VoiceCommandResult
   switch (detectedAction) {
     case 'click':
       return clickAction(targetText, items, direction);
-    
+
     case 'find':
       return findAction(targetText, items, direction);
-    
+
     case 'scroll':
       return scrollAction(targetText, items, direction);
-    
+
     case 'input':
       return inputAction(originalCommand, items);
-    
+
     case 'navigation':
       return navigationAction(targetText || originalCommand, items);
-    
+
     default:
       return findAction(targetText, items, direction);
   }
 }
+

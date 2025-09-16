@@ -167,6 +167,38 @@ export const AI_TEST_CASES_BASIC: AITestCase[] = [
     expected: "navigation",
     description: "앞으로 가기",
     category: "navigation"
+  },
+
+  // scroll (5개)
+  {
+    command: "아래로 스크롤해줘",
+    expected: "scroll",
+    description: "기본 아래 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "위로 올려줘",
+    expected: "scroll",
+    description: "위로 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "페이지 내려줘",
+    expected: "scroll",
+    description: "페이지 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "스크롤 다운",
+    expected: "scroll",
+    description: "영어식 스크롤",
+    category: "scroll"
+  },
+  {
+    command: "밑으로 내려줘",
+    expected: "scroll",
+    description: "자연어 스크롤",
+    category: "scroll"
   }
 ];
 
@@ -341,27 +373,27 @@ export const AI_TEST_CASES_NATURAL: AITestCase[] = [
     category: "natural_purchase"
   },
   {
-    command: "얼마야 이거",
-    expected: "price_comparison", 
-    description: "가격 문의 - 구어체",
+    command: "이 아이폰 얼마야?",
+    expected: "price_comparison",
+    description: "제품 가격 문의 - 구어체",
     category: "natural_price"
   },
   {
-    command: "어디에 있지",
+    command: "로그인 버튼 어디에 있지?",
     expected: "simple_find",
     description: "UI 요소 찾기 - 구어체",
-    category: "natural_find" 
+    category: "natural_find"
   },
   {
-    command: "좀 찾아봐",
+    command: "아이폰 좀 찾아봐",
     expected: "product_search",
-    description: "검색 요청 - 구어체",
+    description: "제품 검색 요청 - 구어체",
     category: "natural_search"
   },
   {
-    command: "뭐가 더 싸?",
+    command: "아이폰이랑 갤럭시 뭐가 더 싸?",
     expected: "price_comparison",
-    description: "가격 비교 - 구어체",
+    description: "제품 가격 비교 - 구어체",
     category: "natural_price"
   }
 ];

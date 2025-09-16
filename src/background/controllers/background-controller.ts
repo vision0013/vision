@@ -20,7 +20,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 응답 메시지들은 라우팅하지 않음 (Background 내부 AI 핸들러가 처리)
   const responseActions = ['modelStatusResponse', 'modelLoaded', 'modelDeleted', 'aiInitialized', 'analysisResult'];
   if (responseActions.includes(request.action)) {
-    console.log(`📬 [background] Response message received: ${request.action} (handled by AI handler)`);
+    console.log(`📬 [background] Response message received: ${request.action} - forwarding to all tabs and extension`);
+    // Offscreen에서 온 응답을 모든 확장 컴포넌트로 브로드캐스트
+    chrome.runtime.sendMessage(request).catch(() => {
+      console.log(`📨 [background] No receivers for response: ${request.action}`);
+    });
     return false; // Background 내부 리스너들이 처리하도록 함
   }
   
@@ -41,17 +45,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // 탭 활성화 감지
 chrome.tabs.onActivated.addListener(activeInfo => {
+  console.log(`🔀 [background] Tab activated: ${activeInfo.tabId}`);
+  
   chrome.tabs.get(activeInfo.tabId, tab => {
-    if (tab.url && isValidUrl(tab.url)) {
-      handleUrlChange(activeInfo.tabId, tab.url);
+    console.log(`📋 [background] Tab ${activeInfo.tabId} info:`, {
+      url: tab.url,
+      status: tab.status,
+      title: tab.title
+    });
+    
+    if (tab.url) {
+      const validationResult = isValidUrl(tab.url);
+      console.log(`🔍 [background] URL validation for "${tab.url}": ${validationResult}`);
+      
+      if (validationResult) {
+        console.log(`✅ [background] Valid URL detected, handling change`);
+        handleUrlChange(activeInfo.tabId, tab.url);
+      } else {
+        console.log(`❌ [background] Invalid URL, skipping:`, tab.url);
+      }
+    } else {
+      console.log(`❌ [background] No URL available for tab ${activeInfo.tabId}`);
     }
   });
 });
 
 // 탭 업데이트 감지 (URL 변경)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.url && tab.url && isValidUrl(tab.url)) {
-    handleUrlChange(tabId, tab.url);
+  console.log(`🔄 [background] Tab ${tabId} updated:`, {
+    url: changeInfo.url,
+    status: changeInfo.status,
+    title: tab.title,
+    currentUrl: tab.url
+  });
+  
+  if (changeInfo.url && tab.url) {
+    const validationResult = isValidUrl(tab.url);
+    console.log(`🔍 [background] URL validation for updated tab "${tab.url}": ${validationResult}`);
+    
+    if (validationResult) {
+      console.log(`🔗 [background] URL changed for tab ${tabId}: ${changeInfo.url} → ${tab.url}`);
+      handleUrlChange(tabId, tab.url);
+    } else {
+      console.log(`🚫 [background] Invalid URL update ignored for tab ${tabId}: ${changeInfo.url}`);
+    }
+  } else if (changeInfo.url) {
+    console.log(`⚠️ [background] URL change detected but validation failed - changeInfo.url: ${changeInfo.url}, tab.url: ${tab.url}`);
+  } else {
+    console.log(`📝 [background] Non-URL update for tab ${tabId}: status=${changeInfo.status}`);
   }
 });
 

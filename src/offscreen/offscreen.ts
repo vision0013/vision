@@ -1,13 +1,14 @@
 // Offscreen Document에서 AI 추론 실행
 
+import { getAIController } from '../features/ai-inference';
+
 // 요청 ID 중복 처리 방지용 세트
 const processedRequestIds = new Set<string>();
 
 // 모든 로직을 비동기 함수로 감싸서 초기화 오류를 잡습니다.
 async function initializeOffscreen() {
   try {
-    // AI 컨트롤러를 동적으로 불러와서 잠재적인 import 오류를 잡습니다.
-    const { getAIController } = await import('../features/ai-inference');
+    // AI 컨트롤러를 정적으로 불러와서 코드 스플리팅 방지
     let aiController = getAIController();
 
     // Background 스크립트로부터 메시지를 수신합니다.
@@ -118,12 +119,20 @@ async function initializeOffscreen() {
           (async () => {
             try {
               const command = message.command || message.voiceInput;
-              const result = await aiController.analyzeIntent(command);
+              const crawledItems = message.crawledItems;
+              const mode = message.mode; // ✨ [신규] 모드 정보 추출
+
+              if (!command || !crawledItems) {
+                throw new Error('Command or crawledItems is missing in analyzeIntent request.');
+              }
+
+              // ✨ [수정] analyzeIntent 호출 시 mode 전달
+              const result = await aiController.analyzeIntent(command, crawledItems, mode);
+              
               chrome.runtime.sendMessage({
                 action: 'analysisResult', // Background가 기대하는 응답 액션명
                 requestId: message.requestId,
-                result: result,
-                intent: result.intent  // 테스트 스크립트를 위한 추가 필드
+                result: result
               });
             } catch (error: any) {
               chrome.runtime.sendMessage({

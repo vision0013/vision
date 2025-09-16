@@ -9,5 +9,9 @@ export const TARGET_TAGS = new Set([
 
 export const SKIP_TAGS = new Set([
   "script", "style", "noscript", "link", "meta", "template",
-  "svg", "canvas", "iframe", "object"
+  "svg", "canvas", "object"
+]);
+
+export const IFRAME_TAGS = new Set([
+  "iframe"
 ]);

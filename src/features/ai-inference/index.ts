@@ -2,7 +2,6 @@
 
 export { AIController, getAIController } from './controllers/ai-controller';
 export type { 
-  VoiceIntent, 
   AIAnalysisResult, 
   AIModelConfig, 
   AIModelStatus

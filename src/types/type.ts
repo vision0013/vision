@@ -1,3 +1,5 @@
+export type Mode = 'navigate' | 'search';
+
 export interface BoundingBox {
   top: number;
   left: number;
@@ -6,7 +8,7 @@ export interface BoundingBox {
   hidden?: boolean;
 }
 
-export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container' | 'input' | 'textarea' | 'select';
+export type ItemType = 'text' | 'image' | 'link' | 'button' | 'container' | 'input' | 'textarea' | 'select' | 'iframe';
 
 export interface CrawledItem {
   id: number;
@@ -23,9 +25,15 @@ export interface CrawledItem {
   href?: string;
   label?: string;
   hidden?: boolean;
-  // 입력 요소 관련 필드
   inputType?: string;
   placeholder?: string;
+  state: {
+    isDisabled: boolean;
+    isChecked?: boolean;
+    isFocused: boolean;
+  };
+  isClickable: boolean;
+  isInputtable: boolean;
 }
 
 export interface AnalysisResult {
@@ -46,8 +54,7 @@ export interface MessagePayload {
   payload?: AnalysisResult;
 }
 
-// ✨ 새로운 크롤러 인터페이스 정의
 export interface ICrawler {
-  analyze(): AnalysisResult;
+  analyze(): Promise<AnalysisResult>;
   analyzeElements(elements: HTMLElement[]): CrawledItem[];
 }
