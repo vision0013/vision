@@ -15,6 +15,7 @@ export class ModelManager {
   private currentModelId: string = DEFAULT_MODEL_ID;
   private downloadProgress: ModelDownloadProgress | null = null;
   private downloadAbortController: AbortController | null = null;
+  private static genaiFileset: any = null; // 🔧 [신규] Fileset을 재사용
 
   constructor(private config: AIModelConfig, modelId?: string) {
     this.currentModelId = modelId || DEFAULT_MODEL_ID;
@@ -77,10 +78,17 @@ export class ModelManager {
       }
 
       const modelFilePath = await OPFSFileManager.getModelFileURL(this.currentModelId);
-      const wasmPath = chrome.runtime.getURL("wasm_files/");
-      const genaiFileset = await FilesetResolver.forGenAiTasks(wasmPath);
 
-      this.llm = await LlmInference.createFromOptions(genaiFileset, {
+      // 🔧 [수정] Fileset을 재사용해서 WebGPU 리소스 중첩 방지
+      if (!ModelManager.genaiFileset) {
+        const wasmPath = chrome.runtime.getURL("wasm_files/");
+        ModelManager.genaiFileset = await FilesetResolver.forGenAiTasks(wasmPath);
+        console.log('🔧 [model-manager] Created new FilesetResolver');
+      } else {
+        console.log('♻️ [model-manager] Reusing existing FilesetResolver');
+      }
+
+      this.llm = await LlmInference.createFromOptions(ModelManager.genaiFileset, {
         baseOptions: { modelAssetPath: modelFilePath },
         maxTokens: this.config.maxTokens!,
         temperature: this.config.temperature!,
@@ -192,13 +200,31 @@ export class ModelManager {
   }
 
   async switchModel(modelId: string): Promise<void> {
+    // 🔧 [수정] 이전 모델 완전 정리
     if (this.llm) {
-      this.llm.close();
+      console.log('🧹 [model-manager] Closing previous model instance');
+      try {
+        this.llm.close();
+      } catch (error) {
+        console.warn('⚠️ [model-manager] Error closing previous model:', error);
+      }
       this.llm = null;
     }
+
+    // 🔧 [신규] 가비지 컬렉션 강제 실행 (브라우저가 허용할 때만)
+    if (typeof window !== 'undefined' && (window as any).gc) {
+      try {
+        (window as any).gc();
+        console.log('🗑️ [model-manager] Forced garbage collection');
+      } catch (error) {
+        // gc() 사용 불가능한 환경에서는 조용히 무시
+      }
+    }
+
     this.currentModelId = modelId;
     this.config = AVAILABLE_MODELS[modelId].defaultConfig;
     this.status = { state: 1, currentModelId: modelId };
+    console.log(`🔄 [model-manager] Switched to model: ${modelId}`);
   }
 
   async getAllModelsStatus(): Promise<Record<string, { exists: boolean; size?: number }>> {

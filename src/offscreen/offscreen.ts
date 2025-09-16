@@ -9,8 +9,7 @@ const processedRequestIds = new Set<string>();
 async function initializeOffscreen() {
   try {
     // AI 컨트롤러를 정적으로 불러와서 코드 스플리팅 방지
-    // 🔧 [수정] 매번 최신 컨트롤러를 가져오도록 변경
-    // let aiController = getAIController();
+    let aiController = getAIController();
 
     // Background 스크립트로부터 메시지를 수신합니다.
     chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
@@ -33,7 +32,6 @@ async function initializeOffscreen() {
         case 'initializeAI':
           (async () => {
             try {
-              const aiController = getAIController(); // 🔧 [수정] 매번 최신 컨트롤러 가져오기
               const success = await aiController.initialize();
               const status = await aiController.getModelStatus();
               chrome.runtime.sendMessage({
@@ -57,7 +55,6 @@ async function initializeOffscreen() {
         case 'getModelStatus':
           (async () => {
             try {
-              const aiController = getAIController(); // 🔧 [수정] 매번 최신 컨트롤러 가져오기
               const status = await aiController.getModelStatus();
               chrome.runtime.sendMessage({
                 action: 'modelStatusResponse',
@@ -81,7 +78,6 @@ async function initializeOffscreen() {
                 throw new Error("API token is missing.");
               }
               // 방법 1: modelAssetPath 시도, 실패시 자동으로 다운로드 방식으로 폴백
-              const aiController = getAIController(); // 🔧 [수정] 매번 최신 컨트롤러 가져오기
               const success = await aiController.downloadAndCacheModelAsPath(message.token);
               const status = aiController.getModelStatus();
               // ai-settings.tsx의 리스너와 맞추기 위해 'modelLoaded'를 사용합니다.
@@ -103,7 +99,6 @@ async function initializeOffscreen() {
         case 'deleteModel':
           (async () => {
             try {
-              const aiController = getAIController(); // 🔧 [수정] 매번 최신 컨트롤러 가져오기
               await aiController.deleteCachedModel();
               chrome.runtime.sendMessage({
                 action: 'modelDeleted',
@@ -132,7 +127,6 @@ async function initializeOffscreen() {
               }
 
               // ✨ [수정] analyzeIntent 호출 시 mode 전달
-              const aiController = getAIController(); // 🔧 [수정] 매번 최신 컨트롤러 가져오기
               const result = await aiController.analyzeIntent(command, crawledItems, mode);
               
               chrome.runtime.sendMessage({
@@ -156,9 +150,10 @@ async function initializeOffscreen() {
             const newModelId = message.modelId;
             console.log(`🎯 [offscreen] Received model switch notification: ${newModelId}`);
 
-            // Offscreen에서도 활성 모델 업데이트
-            const { setCurrentActiveModel } = await import('../features/ai-inference/controllers/ai-controller');
+            // Offscreen에서도 활성 모델 업데이트 및 새 컨트롤러 생성
+            const { setCurrentActiveModel, getAIController } = await import('../features/ai-inference/controllers/ai-controller');
             setCurrentActiveModel(newModelId);
+            aiController = getAIController(newModelId); // 새 모델로 컨트롤러 교체
             console.log(`✅ [offscreen] Active model updated to: ${newModelId}`);
           })();
           break;
