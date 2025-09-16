@@ -13,7 +13,7 @@ export const AVAILABLE_MODELS: AvailableModels = {
     quantization: 'int4',
     category: 'medium',
     defaultConfig: {
-      maxTokens: 2048,
+      maxTokens: 8192,
       temperature: 0.05,
       topK: 40,
       randomSeed: 42
@@ -34,7 +34,7 @@ export const AVAILABLE_MODELS: AvailableModels = {
     quantization: 'int8',
     category: 'medium',
     defaultConfig: {
-      maxTokens: 1280,
+      maxTokens: 8192,
       temperature: 0.1,
       topK: 50,
       randomSeed: 42
@@ -55,7 +55,7 @@ export const AVAILABLE_MODELS: AvailableModels = {
     quantization: 'int4',
     category: 'large',
     defaultConfig: {
-      maxTokens: 4096,
+      maxTokens: 8192,
       temperature: 0.05,
       topK: 40,
       randomSeed: 42

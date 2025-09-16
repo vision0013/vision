@@ -153,6 +153,7 @@ export class ModelManager {
 
   async switchModel(modelId: string): Promise<void> {
     if (this.llm) {
+      this.llm.close();
       this.llm = null;
     }
     this.currentModelId = modelId;

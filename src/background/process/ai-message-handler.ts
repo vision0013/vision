@@ -243,7 +243,7 @@ export async function handleSwitchModel(modelId: string, token?: string): Promis
         chrome.runtime.sendMessage({
           action: 'modelStatusResponse',
           status: {
-            state: 1, // 모델 선택됨, 로드 필요
+            state: 4, // 모델 선택됨, 로드 필요 (UI에서 "로드" 버튼을 표시하도록 4로 변경)
             error: undefined,
             currentModelId: modelId
           }
