@@ -34,6 +34,23 @@ export const useSidePanelController = () => {
   const activeTabIdRef = useRef(activeTabId);
   useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
 
+  // ✨ [신규] 초기 AI 모델 상태 확인
+  useEffect(() => {
+    const checkInitialAIStatus = async () => {
+      try {
+        const response = await chrome.runtime.sendMessage({ action: 'getAIModelStatus' });
+        if (response.success && response.status) {
+          console.log('🔄 [panel-controller] Initial AI status check:', response.status);
+          setAiModelStatus(response.status);
+        }
+      } catch (error) {
+        console.log('⚠️ [panel-controller] Initial AI status check failed:', error);
+      }
+    };
+
+    checkInitialAIStatus();
+  }, []); // 컴포넌트 마운트 시 한 번만 실행
+
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) setActiveTabId(tabs[0].id);
